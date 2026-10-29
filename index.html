@@ -44,40 +44,62 @@
   <button onclick="location.reload()">🔄 Actualiser</button>
 </header>
 
-<div class="container">
-  <!-- Colonne gauche : Feed -->
-  <main>
-    <div class="card">
-      <h2>✍️ Créer un post</h2>
-      <textarea id="postText" rows="3" placeholder="Quoi de neuf ?"></textarea>
-      <button onclick="createPost()">Publier</button>
+<!-- ================= ONBOARDING ================= -->
+<div id="onboarding" style="max-width:700px; margin:24px auto; padding:0 16px;">
+  <div class="card">
+    <!-- Étape 1 : Emoji -->
+    <div id="step1">
+      <h2>1️⃣ Choisis ton emoji</h2>
+      <p style="color:#64748b; font-size:.9rem;">Il te représentera de façon anonyme sur le site.</p>
+      <div class="emoji-picker" id="onboardEmojiPicker"></div>
+      <button id="btnStep1" style="display:none;" onclick="goStep(2)">Continuer →</button>
     </div>
-    <h2>📰 Feed</h2>
-    <div id="feed"></div>
-  </main>
 
-  <!-- Colonne droite : Profil -->
-  <aside class="sidebar">
-    <div class="card center">
-      <h2>👤 Ton profil</h2>
-      <div class="profile-emoji" id="myEmoji">🙂</div>
-      <div class="emoji-picker" id="emojiPicker"></div>
-      <p style="margin-top:14px; color:#64748b; font-size:.85rem;">Centres d'intérêt affichés sur ton profil :</p>
-      <div class="interests" id="interestPicker"></div>
-      <div class="tags" id="myTags" style="justify-content:center;"></div>
+    <!-- Étape 2 : Centres d'intérêt -->
+    <div id="step2" style="display:none;">
+      <h2>2️⃣ Tes centres d'intérêt</h2>
+      <p style="color:#64748b; font-size:.9rem;">Ils seront affichés sur chacun de tes posts.</p>
+      <div class="interests" id="onboardInterestPicker"></div>
+      <button onclick="goStep(3)">Continuer →</button>
+      <button style="background:#334155; color:#e2e8f0;" onclick="goStep(3)">Passer</button>
     </div>
-  </aside>
+
+    <!-- Étape 3 : Personnalité -->
+    <div id="step3" style="display:none;">
+      <h2>3️⃣ Ta personnalité</h2>
+      <p style="color:#64748b; font-size:.9rem;">Choisis ce qui te correspond le mieux.</p>
+      <div class="interests" id="onboardPersonalityPicker"></div>
+      <button onclick="finishOnboarding()">🚀 Entrer dans le feed</button>
+      <button style="background:#334155; color:#e2e8f0;" onclick="finishOnboarding()">Passer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= APPLICATION (FEED) ================= -->
+<div id="app" style="display:none;">
+  <div class="container" style="grid-template-columns:1fr;">
+    <main>
+      <div class="card">
+        <h2>✍️ Créer un post</h2>
+        <textarea id="postText" rows="3" placeholder="Quoi de neuf ?"></textarea>
+        <button onclick="createPost()">Publier</button>
+      </div>
+      <h2>📰 Feed</h2>
+      <div id="feed"></div>
+    </main>
+  </div>
 </div>
 
 <script>
 const EMOJIS = ["😀","😎","🦊","🐱","🐼","🚀","🌟","🎧","🎮","🎨","🍕","⚽","🌵","🦉","🐙","🌈"];
 const INTERESTS = ["Technologie","Sport","Musique","Cinéma","Voyage","Cuisine","Jeux vidéo","Lecture","Art","Nature","Mode","Science"];
+const PERSONALITIES = ["Extraverti","Introverti","Rigolo","Sérieux","Curieux","Rêveur","Sociable","Calme","Aventurier","Créatif"];
 
 // ---- Stockage local (pas de compte) ----
 const ME_KEY = "emojitalk_me";
 const POSTS_KEY = "emojitalk_posts";
 
-let me = JSON.parse(localStorage.getItem(ME_KEY) || '{"emoji":"🙂","interests":[]}');
+let me = JSON.parse(localStorage.getItem(ME_KEY) || '{"emoji":"🙂","interests":[],"personality":[]}');
 let posts = JSON.parse(localStorage.getItem(POSTS_KEY) || "[]");
 
 // Identifiant anonyme persistant
@@ -85,34 +107,64 @@ if (!me.id) { me.id = "anon-" + Math.random().toString(36).slice(2, 9); saveMe()
 function saveMe(){ localStorage.setItem(ME_KEY, JSON.stringify(me)); }
 function savePosts(){ localStorage.setItem(POSTS_KEY, JSON.stringify(posts)); }
 
-// ---- Sélecteur d'emoji ----
-const emojiPicker = document.getElementById("emojiPicker");
+// ================= ONBOARDING =================
+let onboardDone = localStorage.getItem("emojitalk_onboarded") === "1";
+
+// Sélecteur d'emoji (onboarding)
+const onboardEmojiPicker = document.getElementById("onboardEmojiPicker");
 EMOJIS.forEach(e => {
   const b = document.createElement("button");
   b.textContent = e;
-  b.onclick = () => { me.emoji = e; saveMe(); renderProfile(); };
-  emojiPicker.appendChild(b);
+  b.onclick = () => {
+    me.emoji = e; saveMe();
+    document.getElementById("btnStep1").style.display = "inline-block";
+  };
+  onboardEmojiPicker.appendChild(b);
 });
 
-// ---- Sélecteur de centres d'intérêt ----
-const interestPicker = document.getElementById("interestPicker");
+// Sélecteur de centres d'intérêt (onboarding)
+const onboardInterestPicker = document.getElementById("onboardInterestPicker");
 INTERESTS.forEach(i => {
   const label = document.createElement("label");
   label.innerHTML = `<input type="checkbox" value="${i}" ${me.interests.includes(i)?"checked":""}> ${i}`;
   label.querySelector("input").onchange = ev => {
     if (ev.target.checked) me.interests.push(i);
     else me.interests = me.interests.filter(x => x !== i);
-    saveMe(); renderProfile();
+    saveMe();
   };
-  interestPicker.appendChild(label);
+  onboardInterestPicker.appendChild(label);
 });
 
-function renderProfile(){
-  document.getElementById("myEmoji").textContent = me.emoji;
-  const tags = document.getElementById("myTags");
-  tags.innerHTML = me.interests.length
-    ? me.interests.map(i => `<span class="tag">${i}</span>`).join("")
-    : `<span style="color:#64748b;font-size:.85rem;">Aucun centre d'intérêt choisi</span>`;
+// Sélecteur de personnalité (onboarding)
+const onboardPersonalityPicker = document.getElementById("onboardPersonalityPicker");
+PERSONALITIES.forEach(p => {
+  const label = document.createElement("label");
+  label.innerHTML = `<input type="checkbox" value="${p}" ${(me.personality||[]).includes(p)?"checked":""}> ${p}`;
+  label.querySelector("input").onchange = ev => {
+    me.personality = me.personality || [];
+    if (ev.target.checked) me.personality.push(p);
+    else me.personality = me.personality.filter(x => x !== p);
+    saveMe();
+  };
+  onboardPersonalityPicker.appendChild(label);
+});
+
+function goStep(n){
+  document.getElementById("step1").style.display = n === 1 ? "block" : "none";
+  document.getElementById("step2").style.display = n === 2 ? "block" : "none";
+  document.getElementById("step3").style.display = n === 3 ? "block" : "none";
+}
+
+function finishOnboarding(){
+  onboardDone = true;
+  localStorage.setItem("emojitalk_onboarded", "1");
+  showApp();
+}
+
+function showApp(){
+  document.getElementById("onboarding").style.display = "none";
+  document.getElementById("app").style.display = "block";
+  renderFeed();
 }
 
 // ---- Créer un post ----
@@ -124,6 +176,7 @@ function createPost(){
     authorId: me.id,
     authorEmoji: me.emoji,
     authorInterests: [...me.interests],
+    authorPersonality: [...(me.personality || [])],
     text,
     likes: 0,
     date: Date.now()
@@ -147,7 +200,10 @@ function renderFeed(){
         </div>
       </div>
       <p>${p.text.replace(/</g,"&lt;").replace(/\n/g,"<br>")}</p>
-      <div class="tags">${p.authorInterests.map(i => `<span class="tag">${i}</span>`).join("")}</div>
+      <div class="tags">
+        ${p.authorInterests.map(i => `<span class="tag">${i}</span>`).join("")}
+        ${(p.authorPersonality||[]).map(x => `<span class="tag">${x}</span>`).join("")}
+      </div>
       <button class="like" onclick="like(${p.id})">❤️ ${p.likes}</button>
     </div>`).join("");
 }
@@ -157,8 +213,8 @@ function like(id){
   if (p){ p.likes++; savePosts(); renderFeed(); }
 }
 
-renderProfile();
-renderFeed();
+// ---- Démarrage ----
+if (onboardDone) showApp(); else goStep(1);
 </script>
 </body>
 </html>
