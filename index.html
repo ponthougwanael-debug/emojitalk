@@ -43,6 +43,18 @@
   .back-btn:hover { background:#475569; }
   .detail-text { font-size:1.1rem; line-height:1.6; margin-top:10px; }
   .like.liked { color:#f472b6; font-weight:700; }
+  .report-btn { background:none; border:none; color:#64748b; cursor:pointer; margin-top:8px; padding:4px 8px; font-size:.85rem; }
+  .report-btn:hover { color:#fbbf24; }
+  .report-btn.reported { color:#fbbf24; }
+  .char-counter { color:#64748b; font-size:.8rem; text-align:right; margin-top:4px; }
+  .char-counter.limit { color:#f87171; }
+  .sort-bar { display:flex; gap:8px; margin-bottom:14px; }
+  .sort-bar button { margin:0; padding:6px 14px; font-size:.85rem; }
+  .sort-bar button.active { background:#7dd3fc; }
+  button:focus-visible, textarea:focus-visible, input:focus-visible, .post:focus-visible {
+    outline:2px solid #38bdf8; outline-offset:2px;
+  }
+  .undo-box { background:#1e293b; border:1px solid #38bdf8; border-radius:10px; padding:10px 16px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; }
 </style>
 </head>
 <body>
@@ -59,9 +71,9 @@
     <div id="step1">
       <h2>1️⃣ Choisis ton emoji</h2>
       <p style="color:#64748b; font-size:.9rem;">Choisis un emoji dans la liste ou tape ton propre emoji / caractère.</p>
-      <div class="emoji-picker" id="onboardEmojiPicker"></div>
-      <input type="text" id="customEmoji" maxlength="4" placeholder="Ou tape ton emoji / caractère ici (ex : 🐉 ou ★)" style="margin-top:12px;">
-      <p class="error-msg" id="errStep1">⚠️ Veuillez sélectionner un emoji ou en saisir un.</p>
+      <div class="emoji-picker" id="onboardEmojiPicker" role="group" aria-label="Sélection d'emoji"></div>
+      <input type="text" id="customEmoji" maxlength="4" placeholder="Ou tape ton emoji / caractère ici (ex : 🐉 ou ★)" style="margin-top:12px;" aria-label="Emoji personnalisé">
+      <p class="error-msg" id="errStep1" role="alert">⚠️ Veuillez sélectionner un emoji ou en saisir un.</p>
       <button onclick="validateStep1()">Continuer →</button>
     </div>
 
@@ -69,8 +81,8 @@
     <div id="step2" style="display:none;">
       <h2>2️⃣ Tes centres d'intérêt</h2>
       <p style="color:#64748b; font-size:.9rem;">Sélectionne au moins un centre d'intérêt. Ils seront affichés sur chacun de tes posts.</p>
-      <div class="interests" id="onboardInterestPicker"></div>
-      <p class="error-msg" id="errStep2">⚠️ Veuillez sélectionner au moins un centre d'intérêt.</p>
+      <div class="interests" id="onboardInterestPicker" role="group" aria-label="Centres d'intérêt"></div>
+      <p class="error-msg" id="errStep2" role="alert">⚠️ Veuillez sélectionner au moins un centre d'intérêt.</p>
       <button onclick="validateStep2()">Continuer →</button>
     </div>
 
@@ -78,8 +90,8 @@
     <div id="step3" style="display:none;">
       <h2>3️⃣ Ta personnalité</h2>
       <p style="color:#64748b; font-size:.9rem;">Sélectionne au moins un trait de personnalité.</p>
-      <div class="interests" id="onboardPersonalityPicker"></div>
-      <p class="error-msg" id="errStep3">⚠️ Veuillez sélectionner au moins une personnalité.</p>
+      <div class="interests" id="onboardPersonalityPicker" role="group" aria-label="Personnalité"></div>
+      <p class="error-msg" id="errStep3" role="alert">⚠️ Veuillez sélectionner au moins une personnalité.</p>
       <button onclick="finishOnboarding()">🚀 Entrer dans le feed</button>
     </div>
   </div>
@@ -93,10 +105,16 @@
     <main id="feedView">
       <div class="card">
         <h2>✍️ Créer un post</h2>
-        <textarea id="postText" rows="3" placeholder="Quoi de neuf ?"></textarea>
+        <textarea id="postText" rows="3" maxlength="500" placeholder="Quoi de neuf ? (500 caractères max)" aria-label="Contenu du post"></textarea>
+        <div class="char-counter" id="charCounter">0 / 500</div>
         <button onclick="createPost()">Publier</button>
       </div>
+      <div class="sort-bar" role="group" aria-label="Trier le feed">
+        <button id="sortRecent" class="active" onclick="setSort('recent')">🕒 Récents</button>
+        <button id="sortPopular" onclick="setSort('popular')">🔥 Populaires</button>
+      </div>
       <h2>📰 Feed</h2>
+      <div id="undoArea"></div>
       <div id="feed"></div>
     </main>
 
@@ -113,6 +131,25 @@
 const EMOJIS = ["😀","😎","🦊","🐱","🐼","🚀","🌟","🎧","🎮","🎨","🍕","⚽","🌵","🦉","🐙","🌈"];
 const INTERESTS = ["Technologie","Sport","Musique","Cinéma","Voyage","Cuisine","Jeux vidéo","Lecture","Art","Nature","Mode","Science"];
 const PERSONALITIES = ["Extraverti","Introverti","Rigolo","Sérieux","Curieux","Rêveur","Sociable","Calme","Aventurier","Créatif"];
+const MAX_LEN = 500;
+
+// Filtre de mots interdits (modération basique)
+const BANNED_WORDS = ["connard","enculé","salope","pute","ntm","tg","fdp","batard","bâtard","encule"];
+function containsBanned(text){
+  const low = text.toLowerCase();
+  return BANNED_WORDS.some(w => low.includes(w));
+}
+
+// ---- Échappement XSS (appliqué à TOUT contenu affiché, y compris l'emoji libre) ----
+function esc(s){
+  return String(s ?? "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#39;");
+}
+function escMultiline(s){ return esc(s).replace(/\n/g,"<br>"); }
 
 // ---- Stockage local (pas de compte) ----
 const ME_KEY = "emojitalk_me";
@@ -134,6 +171,7 @@ const onboardEmojiPicker = document.getElementById("onboardEmojiPicker");
 EMOJIS.forEach(e => {
   const b = document.createElement("button");
   b.textContent = e;
+  b.setAttribute("aria-label", "Choisir l'emoji " + e);
   b.onclick = () => {
     me.emoji = e; saveMe();
     document.getElementById("customEmoji").value = "";
@@ -142,10 +180,11 @@ EMOJIS.forEach(e => {
   onboardEmojiPicker.appendChild(b);
 });
 
-// Champ libre emoji
+// Champ libre emoji — nettoyé contre le XSS : on retire tout caractère HTML dangereux
 document.getElementById("customEmoji").addEventListener("input", ev => {
-  const v = ev.target.value.trim();
-  if (v) { me.emoji = v; saveMe(); document.getElementById("errStep1").style.display = "none"; }
+  const clean = ev.target.value.replace(/[<>"'`&]/g, "").trim();
+  ev.target.value = clean;
+  if (clean) { me.emoji = clean; saveMe(); document.getElementById("errStep1").style.display = "none"; }
 });
 
 // Sélecteur de centres d'intérêt (onboarding)
@@ -185,7 +224,6 @@ function validateStep1(){
   }
   goStep(2);
 }
-
 function validateStep2(){
   if (!me.interests.length) {
     document.getElementById("errStep2").style.display = "block";
@@ -193,7 +231,6 @@ function validateStep2(){
   }
   goStep(3);
 }
-
 function finishOnboarding(){
   if (!(me.personality || []).length) {
     document.getElementById("errStep3").style.display = "block";
@@ -203,23 +240,33 @@ function finishOnboarding(){
   localStorage.setItem("emojitalk_onboarded", "1");
   showApp();
 }
-
 function goStep(n){
   document.getElementById("step1").style.display = n === 1 ? "block" : "none";
   document.getElementById("step2").style.display = n === 2 ? "block" : "none";
   document.getElementById("step3").style.display = n === 3 ? "block" : "none";
 }
-
 function showApp(){
   document.getElementById("onboarding").style.display = "none";
   document.getElementById("app").style.display = "block";
   showFeed();
 }
 
+// ---- Rate limiting : max 1 post / 10 secondes ----
+const RATE_KEY = "emojitalk_lastPost";
+function rateLimited(){
+  const last = parseInt(localStorage.getItem(RATE_KEY) || "0");
+  const wait = 10000 - (Date.now() - last);
+  if (wait > 0){ alert("⏳ Un peu de patience ! Réessaie dans " + Math.ceil(wait/1000) + "s."); return true; }
+  return false;
+}
+
 // ---- Créer un post ----
 function createPost(){
   const text = document.getElementById("postText").value.trim();
   if (!text) return alert("Écris quelque chose ! 🙂");
+  if (text.length > MAX_LEN) return alert("Post trop long (max " + MAX_LEN + " caractères).");
+  if (containsBanned(text)) return alert("🚫 Ton post contient des mots inappropriés. Merci de rester respectueux.");
+  if (rateLimited()) return;
   posts.unshift({
     id: Date.now(),
     authorId: me.id,
@@ -229,46 +276,143 @@ function createPost(){
     text,
     likes: 0,
     likedBy: [],
+    reports: 0,
+    reportedBy: [],
     date: Date.now()
   });
   savePosts();
+  localStorage.setItem(RATE_KEY, String(Date.now()));
   document.getElementById("postText").value = "";
+  updateCounter();
   const hash = location.hash;
   if (hash.startsWith("#post/")) showFeed();
   else { renderFeed(); renderDetail(); }
 }
 
-// ---- Supprimer un post ----
+// ---- Compteur de caractères ----
+function updateCounter(){
+  const len = document.getElementById("postText").value.length;
+  const c = document.getElementById("charCounter");
+  c.textContent = len + " / " + MAX_LEN;
+  c.classList.toggle("limit", len >= MAX_LEN - 50);
+}
+document.getElementById("postText").addEventListener("input", updateCounter);
+
+// ---- Supprimer un post (avec annulation) ----
+let undoTimer = null;
 function deletePost(id){
   if (!confirm("Supprimer ce post ?")) return;
+  const removed = posts.find(p => p.id === id);
+  const removedIndex = posts.indexOf(removed);
   posts = posts.filter(p => p.id !== id);
   savePosts();
   showFeed();
+  // Bandeau d'annulation (10 s)
+  const area = document.getElementById("undoArea");
+  area.innerHTML = `
+    <div class="undo-box" role="status">
+      <span>🗑️ Post supprimé.</span>
+      <button onclick="undoDelete(${removedIndex}, ${id})">↩️ Annuler</button>
+    </div>`;
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => { area.innerHTML = ""; }, 10000);
+}
+function undoDelete(index, id){
+  clearTimeout(undoTimer);
+  if (!posts.find(p => p.id === id)) {
+    posts.splice(index, 0, arguments.callee ? null : null); // non utilisé
+  }
+  document.getElementById("undoArea").innerHTML = "";
+}
+// Restauration simple : on garde une copie en mémoire
+let lastDeleted = null, lastIndex = 0;
+function deletePostSafe(id){
+  const idx = posts.findIndex(p => p.id === id);
+  if (idx === -1) return;
+  lastDeleted = posts[idx]; lastIndex = idx;
+  posts.splice(idx, 1);
+  savePosts();
+  showFeed();
+  const area = document.getElementById("undoArea");
+  area.innerHTML = `
+    <div class="undo-box" role="status">
+      <span>🗑️ Post supprimé.</span>
+      <button onclick="undoRestore()">↩️ Annuler</button>
+    </div>`;
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => { lastDeleted = null; area.innerHTML = ""; }, 10000);
+}
+function undoRestore(){
+  clearTimeout(undoTimer);
+  if (lastDeleted){
+    posts.splice(lastIndex, 0, lastDeleted);
+    savePosts();
+    lastDeleted = null;
+  }
+  document.getElementById("undoArea").innerHTML = "";
+  renderFeed();
+}
+
+// ---- Signaler un post ----
+function reportPost(id){
+  const p = posts.find(p => p.id === id);
+  if (!p) return;
+  p.reportedBy = p.reportedBy || [];
+  if (p.reportedBy.includes(me.id)) return;
+  p.reportedBy.push(me.id);
+  p.reports = (p.reports || 0) + 1;
+  // Auto-masquage si signalé 3 fois
+  if (p.reports >= 3) {
+    posts = posts.filter(x => x.id !== id);
+    alert("🚩 Post signalé par plusieurs personnes et retiré du feed.");
+  } else {
+    alert("🚩 Merci, ton signalement a été pris en compte.");
+  }
+  savePosts();
+  renderFeed(); renderDetail();
+}
+
+// ---- Tri du feed ----
+let sortMode = "recent";
+function setSort(mode){
+  sortMode = mode;
+  document.getElementById("sortRecent").classList.toggle("active", mode === "recent");
+  document.getElementById("sortPopular").classList.toggle("active", mode === "popular");
+  renderFeed();
+}
+function sortedPosts(){
+  const arr = [...posts];
+  if (sortMode === "popular") arr.sort((a,b) => b.likes - a.likes || b.date - a.date);
+  else arr.sort((a,b) => b.date - a.date);
+  return arr;
 }
 
 // ---- Feed ----
 function renderFeed(){
   const feed = document.getElementById("feed");
   if (!posts.length) { feed.innerHTML = `<div class="empty">Aucun post. Lance la discussion ! 🚀</div>`; return; }
-  feed.innerHTML = posts.map(p => `
-    <div class="post" onclick="openPost(${p.id})">
+  feed.innerHTML = sortedPosts().map(p => `
+    <div class="post" onclick="openPost(${p.id})" tabindex="0" role="button" aria-label="Ouvrir le post" onkeydown="if(event.key==='Enter')openPost(${p.id})">
       <div class="post-head">
-        <span class="avatar">${p.authorEmoji}</span>
+        <span class="avatar" aria-hidden="true">${esc(p.authorEmoji)}</span>
         <div>
-          <strong>Anonyme ${p.authorEmoji}</strong><br>
+          <strong>Anonyme ${esc(p.authorEmoji)}</strong><br>
           <time>${new Date(p.date).toLocaleString("fr-FR")}</time>
         </div>
       </div>
-      <p>${p.text.replace(/</g,"&lt;").replace(/\n/g,"<br>")}</p>
+      <p>${escMultiline(p.text)}</p>
       <div class="tags">
-        ${p.authorInterests.map(i => `<span class="tag">${i}</span>`).join("")}
-        ${(p.authorPersonality||[]).map(x => `<span class="tag">${x}</span>`).join("")}
+        ${p.authorInterests.map(i => `<span class="tag">${esc(i)}</span>`).join("")}
+        ${(p.authorPersonality||[]).map(x => `<span class="tag">${esc(x)}</span>`).join("")}
       </div>
       <div onclick="event.stopPropagation();">
-        <button class="like ${p.likedBy.includes(me.id) ? "liked" : ""}" onclick="toggleLike(${p.id})">
+        <button class="like ${p.likedBy.includes(me.id) ? "liked" : ""}" onclick="toggleLike(${p.id})" aria-label="Aimer ce post">
           ${p.likedBy.includes(me.id) ? "❤️" : "🤍"} ${p.likes}
         </button>
-        ${p.authorId === me.id ? `<button class="delete-btn" onclick="event.stopPropagation(); deletePost(${p.id})">🗑️ Supprimer</button>` : ""}
+        <button class="report-btn ${p.reportedBy?.includes(me.id) ? "reported" : ""}" onclick="reportPost(${p.id})" aria-label="Signaler ce post" ${p.reportedBy?.includes(me.id) ? "disabled" : ""}>
+          🚩 ${p.reportedBy?.includes(me.id) ? "Signalé" : "Signaler"}
+        </button>
+        ${p.authorId === me.id ? `<button class="delete-btn" onclick="event.stopPropagation(); deletePostSafe(${p.id})">🗑️ Supprimer</button>` : ""}
       </div>
     </div>`).join("");
 }
@@ -292,50 +436,44 @@ function toggleLike(id){
 }
 
 // ---- Vue détail (page différente via #post/id) ----
-function openPost(id){
-  location.hash = "#post/" + id;
-  showDetail();
-}
-
+function openPost(id){ location.hash = "#post/" + id; showDetail(); }
 function showFeed(){
   location.hash = "";
   document.getElementById("feedView").style.display = "block";
   document.getElementById("detailView").style.display = "none";
   renderFeed();
 }
-
 function showDetail(){
   document.getElementById("feedView").style.display = "none";
   document.getElementById("detailView").style.display = "block";
   renderDetail();
 }
-
 function renderDetail(){
   const id = parseInt(location.hash.replace("#post/", ""));
   const p = posts.find(p => p.id === id);
   const container = document.getElementById("postDetail");
-  if (!p) {
-    container.innerHTML = `<div class="empty">Post introuvable. 😕</div>`;
-    return;
-  }
+  if (!p) { container.innerHTML = `<div class="empty">Post introuvable. 😕</div>`; return; }
   container.innerHTML = `
     <div class="card">
       <div class="post-head">
-        <span class="avatar" style="font-size:3rem;">${p.authorEmoji}</span>
+        <span class="avatar" style="font-size:3rem;" aria-hidden="true">${esc(p.authorEmoji)}</span>
         <div>
-          <strong>Anonyme ${p.authorEmoji}</strong><br>
+          <strong>Anonyme ${esc(p.authorEmoji)}</strong><br>
           <time>${new Date(p.date).toLocaleString("fr-FR")}</time>
         </div>
       </div>
-      <p class="detail-text">${p.text.replace(/</g,"&lt;").replace(/\n/g,"<br>")}</p>
+      <p class="detail-text">${escMultiline(p.text)}</p>
       <div class="tags">
-        ${p.authorInterests.map(i => `<span class="tag">${i}</span>`).join("")}
-        ${(p.authorPersonality||[]).map(x => `<span class="tag">${x}</span>`).join("")}
+        ${p.authorInterests.map(i => `<span class="tag">${esc(i)}</span>`).join("")}
+        ${(p.authorPersonality||[]).map(x => `<span class="tag">${esc(x)}</span>`).join("")}
       </div>
       <button class="like ${p.likedBy.includes(me.id) ? "liked" : ""}" onclick="toggleLike(${p.id})">
         ${p.likedBy.includes(me.id) ? "❤️" : "🤍"} ${p.likes} j'aime
       </button>
-      ${p.authorId === me.id ? `<button class="delete-btn" onclick="deletePost(${p.id})">🗑️ Supprimer mon post</button>` : ""}
+      <button class="report-btn ${p.reportedBy?.includes(me.id) ? "reported" : ""}" onclick="reportPost(${p.id})" ${p.reportedBy?.includes(me.id) ? "disabled" : ""}>
+        🚩 ${p.reportedBy?.includes(me.id) ? "Signalé" : "Signaler"}
+      </button>
+      ${p.authorId === me.id ? `<button class="delete-btn" onclick="deletePostSafe(${p.id})">🗑️ Supprimer mon post</button>` : ""}
     </div>`;
 }
 
