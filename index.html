@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EmojiTalk — Discussions sans compte</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',sans-serif; }
+  body { background:#0f172a; color:#e2e8f0; min-height:100vh; }
+  header { background:#1e293b; padding:18px 24px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 10px rgba(0,0,0,.4); position:sticky; top:0; z-index:10; }
+  header h1 { font-size:1.4rem; }
+  header h1 span { color:#38bdf8; }
+  .container { max-width:900px; margin:24px auto; padding:0 16px; display:grid; grid-template-columns:1fr 300px; gap:24px; }
+  @media(max-width:760px){ .container{ grid-template-columns:1fr; } }
+  .card { background:#1e293b; border-radius:14px; padding:20px; margin-bottom:20px; border:1px solid #334155; }
+  h2 { font-size:1.1rem; margin-bottom:12px; color:#38bdf8; }
+  textarea, input[type=text] { width:100%; background:#0f172a; border:1px solid #334155; color:#e2e8f0; border-radius:8px; padding:10px; font-size:1rem; resize:vertical; }
+  button { background:#38bdf8; color:#0f172a; border:none; padding:10px 18px; border-radius:8px; font-weight:700; cursor:pointer; margin-top:10px; }
+  button:hover { background:#7dd3fc; }
+  .emoji-picker { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .emoji-picker button { margin:0; padding:6px 10px; background:#0f172a; font-size:1.3rem; border:1px solid #334155; }
+  .emoji-picker button:hover { border-color:#38bdf8; }
+  .interests { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .interests label { background:#0f172a; border:1px solid #334155; padding:6px 12px; border-radius:20px; cursor:pointer; font-size:.9rem; }
+  .interests input { display:none; }
+  .interests label:has(input:checked) { background:#38bdf8; color:#0f172a; font-weight:700; }
+  .post { background:#1e293b; border:1px solid #334155; border-radius:14px; padding:16px; margin-bottom:14px; }
+  .post-head { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .avatar { font-size:1.8rem; }
+  .tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .tag { background:#0f172a; border:1px solid #334155; color:#38bdf8; padding:3px 10px; border-radius:12px; font-size:.8rem; }
+  .post time { color:#64748b; font-size:.8rem; }
+  .sidebar .profile-emoji { text-align:center; font-size:4rem; }
+  .sidebar .center { text-align:center; }
+  .like { background:none; border:none; color:#e2e8f0; cursor:pointer; margin-top:8px; padding:4px 8px; font-size:.95rem; }
+  .like:hover { color:#f472b6; }
+  .empty { color:#64748b; text-align:center; padding:30px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>💬 Emoji<span>Talk</span></h1>
+  <button onclick="location.reload()">🔄 Actualiser</button>
+</header>
+
+<div class="container">
+  <!-- Colonne gauche : Feed -->
+  <main>
+    <div class="card">
+      <h2>✍️ Créer un post</h2>
+      <textarea id="postText" rows="3" placeholder="Quoi de neuf ?"></textarea>
+      <button onclick="createPost()">Publier</button>
+    </div>
+    <h2>📰 Feed</h2>
+    <div id="feed"></div>
+  </main>
+
+  <!-- Colonne droite : Profil -->
+  <aside class="sidebar">
+    <div class="card center">
+      <h2>👤 Ton profil</h2>
+      <div class="profile-emoji" id="myEmoji">🙂</div>
+      <div class="emoji-picker" id="emojiPicker"></div>
+      <p style="margin-top:14px; color:#64748b; font-size:.85rem;">Centres d'intérêt affichés sur ton profil :</p>
+      <div class="interests" id="interestPicker"></div>
+      <div class="tags" id="myTags" style="justify-content:center;"></div>
+    </div>
+  </aside>
+</div>
+
+<script>
+const EMOJIS = ["😀","😎","🦊","🐱","🐼","🚀","🌟","🎧","🎮","🎨","🍕","⚽","🌵","🦉","🐙","🌈"];
+const INTERESTS = ["Technologie","Sport","Musique","Cinéma","Voyage","Cuisine","Jeux vidéo","Lecture","Art","Nature","Mode","Science"];
+
+// ---- Stockage local (pas de compte) ----
+const ME_KEY = "emojitalk_me";
+const POSTS_KEY = "emojitalk_posts";
+
+let me = JSON.parse(localStorage.getItem(ME_KEY) || '{"emoji":"🙂","interests":[]}');
+let posts = JSON.parse(localStorage.getItem(POSTS_KEY) || "[]");
+
+// Identifiant anonyme persistant
+if (!me.id) { me.id = "anon-" + Math.random().toString(36).slice(2, 9); saveMe(); }
+function saveMe(){ localStorage.setItem(ME_KEY, JSON.stringify(me)); }
+function savePosts(){ localStorage.setItem(POSTS_KEY, JSON.stringify(posts)); }
+
+// ---- Sélecteur d'emoji ----
+const emojiPicker = document.getElementById("emojiPicker");
+EMOJIS.forEach(e => {
+  const b = document.createElement("button");
+  b.textContent = e;
+  b.onclick = () => { me.emoji = e; saveMe(); renderProfile(); };
+  emojiPicker.appendChild(b);
+});
+
+// ---- Sélecteur de centres d'intérêt ----
+const interestPicker = document.getElementById("interestPicker");
+INTERESTS.forEach(i => {
+  const label = document.createElement("label");
+  label.innerHTML = `<input type="checkbox" value="${i}" ${me.interests.includes(i)?"checked":""}> ${i}`;
+  label.querySelector("input").onchange = ev => {
+    if (ev.target.checked) me.interests.push(i);
+    else me.interests = me.interests.filter(x => x !== i);
+    saveMe(); renderProfile();
+  };
+  interestPicker.appendChild(label);
+});
+
+function renderProfile(){
+  document.getElementById("myEmoji").textContent = me.emoji;
+  const tags = document.getElementById("myTags");
+  tags.innerHTML = me.interests.length
+    ? me.interests.map(i => `<span class="tag">${i}</span>`).join("")
+    : `<span style="color:#64748b;font-size:.85rem;">Aucun centre d'intérêt choisi</span>`;
+}
+
+// ---- Créer un post ----
+function createPost(){
+  const text = document.getElementById("postText").value.trim();
+  if (!text) return alert("Écris quelque chose ! 🙂");
+  posts.unshift({
+    id: Date.now(),
+    authorId: me.id,
+    authorEmoji: me.emoji,
+    authorInterests: [...me.interests],
+    text,
+    likes: 0,
+    date: Date.now()
+  });
+  savePosts();
+  document.getElementById("postText").value = "";
+  renderFeed();
+}
+
+// ---- Feed ----
+function renderFeed(){
+  const feed = document.getElementById("feed");
+  if (!posts.length) { feed.innerHTML = `<div class="empty">Aucun post. Lance la discussion ! 🚀</div>`; return; }
+  feed.innerHTML = posts.map(p => `
+    <div class="post">
+      <div class="post-head">
+        <span class="avatar">${p.authorEmoji}</span>
+        <div>
+          <strong>Anonyme ${p.authorEmoji}</strong><br>
+          <time>${new Date(p.date).toLocaleString("fr-FR")}</time>
+        </div>
+      </div>
+      <p>${p.text.replace(/</g,"&lt;").replace(/\n/g,"<br>")}</p>
+      <div class="tags">${p.authorInterests.map(i => `<span class="tag">${i}</span>`).join("")}</div>
+      <button class="like" onclick="like(${p.id})">❤️ ${p.likes}</button>
+    </div>`).join("");
+}
+
+function like(id){
+  const p = posts.find(p => p.id === id);
+  if (p){ p.likes++; savePosts(); renderFeed(); }
+}
+
+renderProfile();
+renderFeed();
+</script>
+</body>
+</html>
