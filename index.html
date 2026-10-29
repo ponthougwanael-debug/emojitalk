@@ -31,8 +31,6 @@
   .tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
   .tag { background:#0f172a; border:1px solid #334155; color:#38bdf8; padding:3px 10px; border-radius:12px; font-size:.8rem; }
   .post time { color:#64748b; font-size:.8rem; }
-  .sidebar .profile-emoji { text-align:center; font-size:4rem; }
-  .sidebar .center { text-align:center; }
   .like { background:none; border:none; color:#e2e8f0; cursor:pointer; margin-top:8px; padding:4px 8px; font-size:.95rem; }
   .like:hover { color:#f472b6; }
   .empty { color:#64748b; text-align:center; padding:30px 0; }
@@ -128,64 +126,70 @@
 </div>
 
 <script>
-const EMOJIS = ["😀","😎","🦊","🐱","🐼","🚀","🌟","🎧","🎮","🎨","🍕","⚽","🌵","🦉","🐙","🌈"];
-const INTERESTS = ["Technologie","Sport","Musique","Cinéma","Voyage","Cuisine","Jeux vidéo","Lecture","Art","Nature","Mode","Science"];
-const PERSONALITIES = ["Extraverti","Introverti","Rigolo","Sérieux","Curieux","Rêveur","Sociable","Calme","Aventurier","Créatif"];
-const MAX_LEN = 500;
+"use strict";
+
+var EMOJIS = ["😀","😎","🦊","🐱","🐼","🚀","🌟","🎧","🎮","🎨","🍕","⚽","🌵","🦉","🐙","🌈"];
+var INTERESTS = ["Technologie","Sport","Musique","Cinéma","Voyage","Cuisine","Jeux vidéo","Lecture","Art","Nature","Mode","Science"];
+var PERSONALITIES = ["Extraverti","Introverti","Rigolo","Sérieux","Curieux","Rêveur","Sociable","Calme","Aventurier","Créatif"];
+var MAX_LEN = 500;
 
 // Filtre de mots interdits (modération basique)
-const BANNED_WORDS = ["connard","enculé","salope","pute","ntm","tg","fdp","batard","bâtard","encule"];
+var BANNED_WORDS = ["connard","enculé","salope","pute","ntm","tg","fdp","batard","bâtard","encule"];
 function containsBanned(text){
-  const low = text.toLowerCase();
-  return BANNED_WORDS.some(w => low.includes(w));
+  var low = text.toLowerCase();
+  for (var i = 0; i < BANNED_WORDS.length; i++) {
+    if (low.indexOf(BANNED_WORDS[i]) !== -1) return true;
+  }
+  return false;
 }
 
 // ---- Échappement XSS (appliqué à TOUT contenu affiché, y compris l'emoji libre) ----
 function esc(s){
-  return String(s ?? "")
-    .replace(/&/g,"&amp;")
-    .replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;")
-    .replace(/"/g,"&quot;")
-    .replace(/'/g,"&#39;");
+  s = String(s == null ? "" : s);
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
-function escMultiline(s){ return esc(s).replace(/\n/g,"<br>"); }
+function escMultiline(s){ return esc(s).replace(/\n/g, "<br>"); }
 
 // ---- Stockage local (pas de compte) ----
-const ME_KEY = "emojitalk_me";
-const POSTS_KEY = "emojitalk_posts";
+var ME_KEY = "emojitalk_me";
+var POSTS_KEY = "emojitalk_posts";
 
-let me = JSON.parse(localStorage.getItem(ME_KEY) || '{"emoji":"","interests":[],"personality":[]}');
-let posts = JSON.parse(localStorage.getItem(POSTS_KEY) || "[]");
+var me = JSON.parse(localStorage.getItem(ME_KEY) || '{"emoji":"","interests":[],"personality":[]}');
+var posts = JSON.parse(localStorage.getItem(POSTS_KEY) || "[]");
+if (!Array.isArray(posts)) posts = [];
 
 // ---- Migration : anciens posts sans likedBy / reports (évite un plantage au rendu) ----
-let migrationNeeded = false;
-posts = posts.map(p => {
-  const fixed = { likedBy: [], reports: 0, reportedBy: [], ...p };
-  if (fixed.likes > 0 && fixed.likedBy.length === 0) {
-    // On ne connaît pas les anciens likers : on met likes à 0 pour repartir proprement
-    fixed.likes = 0;
-  }
-  if (JSON.stringify(fixed) !== JSON.stringify(p)) migrationNeeded = true;
-  return fixed;
+var migrationNeeded = false;
+posts.forEach(function (p) {
+  if (!Array.isArray(p.likedBy)) { p.likedBy = []; if (p.likes > 0) p.likes = 0; migrationNeeded = true; }
+  if (typeof p.reports !== "number") { p.reports = 0; migrationNeeded = true; }
+  if (!Array.isArray(p.reportedBy)) { p.reportedBy = []; migrationNeeded = true; }
+  if (!Array.isArray(p.authorInterests)) p.authorInterests = [];
+  if (!Array.isArray(p.authorPersonality)) p.authorPersonality = [];
 });
+function saveMe(){ localStorage.setItem(ME_KEY, JSON.stringify(me)); }
+function savePosts(){ localStorage.setItem(POSTS_KEY, JSON.stringify(posts)); }
 if (migrationNeeded) savePosts();
 
 // Identifiant anonyme persistant
 if (!me.id) { me.id = "anon-" + Math.random().toString(36).slice(2, 9); saveMe(); }
-function saveMe(){ localStorage.setItem(ME_KEY, JSON.stringify(me)); }
-function savePosts(){ localStorage.setItem(POSTS_KEY, JSON.stringify(posts)); }
 
 // ================= ONBOARDING =================
-let onboardDone = localStorage.getItem("emojitalk_onboarded") === "1";
+var onboardDone = localStorage.getItem("emojitalk_onboarded") === "1";
 
 // Sélecteur d'emoji (onboarding)
-const onboardEmojiPicker = document.getElementById("onboardEmojiPicker");
-EMOJIS.forEach(e => {
-  const b = document.createElement("button");
+var onboardEmojiPicker = document.getElementById("onboardEmojiPicker");
+EMOJIS.forEach(function (e) {
+  var b = document.createElement("button");
+  b.type = "button";
   b.textContent = e;
   b.setAttribute("aria-label", "Choisir l'emoji " + e);
-  b.onclick = () => {
+  b.onclick = function () {
     me.emoji = e; saveMe();
     document.getElementById("customEmoji").value = "";
     document.getElementById("errStep1").style.display = "none";
@@ -194,38 +198,48 @@ EMOJIS.forEach(e => {
 });
 
 // Champ libre emoji — nettoyé contre le XSS : on retire tout caractère HTML dangereux
-document.getElementById("customEmoji").addEventListener("input", ev => {
-  const clean = ev.target.value.replace(/[<>"'`&]/g, "").trim();
+document.getElementById("customEmoji").addEventListener("input", function (ev) {
+  var clean = ev.target.value.replace(/[<>"'`&]/g, "").trim();
   ev.target.value = clean;
   if (clean) { me.emoji = clean; saveMe(); document.getElementById("errStep1").style.display = "none"; }
 });
 
 // Sélecteur de centres d'intérêt (onboarding)
-const onboardInterestPicker = document.getElementById("onboardInterestPicker");
-INTERESTS.forEach(i => {
-  const label = document.createElement("label");
-  label.innerHTML = `<input type="checkbox" value="${i}" ${me.interests.includes(i)?"checked":""}> ${i}`;
-  label.querySelector("input").onchange = ev => {
+var onboardInterestPicker = document.getElementById("onboardInterestPicker");
+INTERESTS.forEach(function (i) {
+  var label = document.createElement("label");
+  var cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.value = i;
+  cb.checked = me.interests.indexOf(i) !== -1;
+  cb.onchange = function (ev) {
     if (ev.target.checked) me.interests.push(i);
-    else me.interests = me.interests.filter(x => x !== i);
+    else me.interests = me.interests.filter(function (x) { return x !== i; });
     saveMe();
     document.getElementById("errStep2").style.display = "none";
   };
+  label.appendChild(cb);
+  label.appendChild(document.createTextNode(" " + i));
   onboardInterestPicker.appendChild(label);
 });
 
 // Sélecteur de personnalité (onboarding)
-const onboardPersonalityPicker = document.getElementById("onboardPersonalityPicker");
-PERSONALITIES.forEach(p => {
-  const label = document.createElement("label");
-  label.innerHTML = `<input type="checkbox" value="${p}" ${(me.personality||[]).includes(p)?"checked":""}> ${p}`;
-  label.querySelector("input").onchange = ev => {
+var onboardPersonalityPicker = document.getElementById("onboardPersonalityPicker");
+PERSONALITIES.forEach(function (p) {
+  var label = document.createElement("label");
+  var cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.value = p;
+  cb.checked = (me.personality || []).indexOf(p) !== -1;
+  cb.onchange = function (ev) {
     me.personality = me.personality || [];
     if (ev.target.checked) me.personality.push(p);
-    else me.personality = me.personality.filter(x => x !== p);
+    else me.personality = me.personality.filter(function (x) { return x !== p; });
     saveMe();
     document.getElementById("errStep3").style.display = "none";
   };
+  label.appendChild(cb);
+  label.appendChild(document.createTextNode(" " + p));
   onboardPersonalityPicker.appendChild(label);
 });
 
@@ -265,28 +279,28 @@ function showApp(){
 }
 
 // ---- Rate limiting : max 1 post / 10 secondes ----
-const RATE_KEY = "emojitalk_lastPost";
+var RATE_KEY = "emojitalk_lastPost";
 function rateLimited(){
-  const last = parseInt(localStorage.getItem(RATE_KEY) || "0");
-  const wait = 10000 - (Date.now() - last);
+  var last = parseInt(localStorage.getItem(RATE_KEY) || "0", 10);
+  var wait = 10000 - (Date.now() - last);
   if (wait > 0){ alert("⏳ Un peu de patience ! Réessaie dans " + Math.ceil(wait/1000) + "s."); return true; }
   return false;
 }
 
 // ---- Créer un post ----
 function createPost(){
-  const text = document.getElementById("postText").value.trim();
-  if (!text) return alert("Écris quelque chose ! 🙂");
-  if (text.length > MAX_LEN) return alert("Post trop long (max " + MAX_LEN + " caractères).");
-  if (containsBanned(text)) return alert("🚫 Ton post contient des mots inappropriés. Merci de rester respectueux.");
+  var text = document.getElementById("postText").value.trim();
+  if (!text) { alert("Écris quelque chose ! 🙂"); return; }
+  if (text.length > MAX_LEN) { alert("Post trop long (max " + MAX_LEN + " caractères)."); return; }
+  if (containsBanned(text)) { alert("🚫 Ton post contient des mots inappropriés. Merci de rester respectueux."); return; }
   if (rateLimited()) return;
   posts.unshift({
     id: Date.now(),
     authorId: me.id,
     authorEmoji: me.emoji,
-    authorInterests: [...me.interests],
-    authorPersonality: [...(me.personality || [])],
-    text,
+    authorInterests: me.interests.slice(),
+    authorPersonality: (me.personality || []).slice(),
+    text: text,
     likes: 0,
     likedBy: [],
     reports: 0,
@@ -297,37 +311,33 @@ function createPost(){
   localStorage.setItem(RATE_KEY, String(Date.now()));
   document.getElementById("postText").value = "";
   updateCounter();
-  const hash = location.hash;
-  if (hash.startsWith("#post/")) showFeed();
+  if (location.hash.indexOf("#post/") === 0) showFeed();
   else { renderFeed(); renderDetail(); }
 }
 
 // ---- Compteur de caractères ----
 function updateCounter(){
-  const len = document.getElementById("postText").value.length;
-  const c = document.getElementById("charCounter");
+  var len = document.getElementById("postText").value.length;
+  var c = document.getElementById("charCounter");
   c.textContent = len + " / " + MAX_LEN;
   c.classList.toggle("limit", len >= MAX_LEN - 50);
 }
 document.getElementById("postText").addEventListener("input", updateCounter);
 
 // ---- Supprimer un post (avec annulation 10 s) ----
-let undoTimer = null, lastDeleted = null, lastIndex = 0;
+var undoTimer = null, lastDeleted = null, lastIndex = 0;
 function deletePostSafe(id){
-  const idx = posts.findIndex(p => p.id === id);
+  var idx = -1;
+  for (var i = 0; i < posts.length; i++) { if (posts[i].id === id) { idx = i; break; } }
   if (idx === -1) return;
   lastDeleted = posts[idx]; lastIndex = idx;
   posts.splice(idx, 1);
   savePosts();
   showFeed();
-  const area = document.getElementById("undoArea");
-  area.innerHTML = `
-    <div class="undo-box" role="status">
-      <span>🗑️ Post supprimé.</span>
-      <button onclick="undoRestore()">↩️ Annuler</button>
-    </div>`;
+  var area = document.getElementById("undoArea");
+  area.innerHTML = '<div class="undo-box" role="status"><span>🗑️ Post supprimé.</span><button type="button" onclick="undoRestore()">↩️ Annuler</button></div>';
   clearTimeout(undoTimer);
-  undoTimer = setTimeout(() => { lastDeleted = null; area.innerHTML = ""; }, 10000);
+  undoTimer = setTimeout(function () { lastDeleted = null; area.innerHTML = ""; }, 10000);
 }
 function undoRestore(){
   clearTimeout(undoTimer);
@@ -342,15 +352,15 @@ function undoRestore(){
 
 // ---- Signaler un post ----
 function reportPost(id){
-  const p = posts.find(p => p.id === id);
+  var p = null;
+  for (var i = 0; i < posts.length; i++) { if (posts[i].id === id) { p = posts[i]; break; } }
   if (!p) return;
   p.reportedBy = p.reportedBy || [];
-  if (p.reportedBy.includes(me.id)) return;
+  if (p.reportedBy.indexOf(me.id) !== -1) return;
   p.reportedBy.push(me.id);
   p.reports = (p.reports || 0) + 1;
-  // Auto-masquage si signalé 3 fois
   if (p.reports >= 3) {
-    posts = posts.filter(x => x.id !== id);
+    posts = posts.filter(function (x) { return x.id !== id; });
     alert("🚩 Post signalé par plusieurs personnes et retiré du feed.");
   } else {
     alert("🚩 Merci, ton signalement a été pris en compte.");
@@ -360,7 +370,7 @@ function reportPost(id){
 }
 
 // ---- Tri du feed ----
-let sortMode = "recent";
+var sortMode = "recent";
 function setSort(mode){
   sortMode = mode;
   document.getElementById("sortRecent").classList.toggle("active", mode === "recent");
@@ -368,64 +378,84 @@ function setSort(mode){
   renderFeed();
 }
 function sortedPosts(){
-  const arr = [...posts];
-  if (sortMode === "popular") arr.sort((a,b) => b.likes - a.likes || b.date - a.date);
-  else arr.sort((a,b) => b.date - a.date);
+  var arr = posts.slice();
+  if (sortMode === "popular") arr.sort(function (a, b) { return (b.likes - a.likes) || (b.date - a.date); });
+  else arr.sort(function (a, b) { return b.date - a.date; });
   return arr;
+}
+
+// ---- Rendu d'une carte de post (sans template literals imbriqués) ----
+function postCardHTML(p, isDetail){
+  var liked = p.likedBy.indexOf(me.id) !== -1;
+  var reported = p.reportedBy.indexOf(me.id) !== -1;
+  var h = "";
+  h += '<div class="post-head">';
+  h += '<span class="avatar" aria-hidden="true"' + (isDetail ? ' style="font-size:3rem;"' : '') + '>' + esc(p.authorEmoji) + '</span>';
+  h += '<div><strong>Anonyme ' + esc(p.authorEmoji) + '</strong><br>';
+  h += '<time>' + new Date(p.date).toLocaleString("fr-FR") + '</time></div>';
+  h += '</div>';
+  h += '<p' + (isDetail ? ' class="detail-text"' : '') + '>' + escMultiline(p.text) + '</p>';
+  h += '<div class="tags">';
+  p.authorInterests.forEach(function (i) { h += '<span class="tag">' + esc(i) + '</span>'; });
+  p.authorPersonality.forEach(function (x) { h += '<span class="tag">' + esc(x) + '</span>'; });
+  h += '</div>';
+  h += '<div data-actions="1">';
+  h += '<button type="button" class="like' + (liked ? " liked" : "") + '" onclick="toggleLike(' + p.id + ')" aria-label="Aimer ce post">' + (liked ? "❤️" : "🤍") + " " + p.likes + (isDetail ? " j'aime" : "") + '</button>';
+  h += '<button type="button" class="report-btn' + (reported ? " reported" : "") + '" onclick="reportPost(' + p.id + ')" aria-label="Signaler ce post"' + (reported ? " disabled" : "") + '>🚩 ' + (reported ? "Signalé" : "Signaler") + '</button>';
+  if (p.authorId === me.id) {
+    h += '<button type="button" class="delete-btn" onclick="deletePostSafe(' + p.id + ')">🗑️ ' + (isDetail ? "Supprimer mon post" : "Supprimer") + '</button>';
+  }
+  h += '</div>';
+  return h;
 }
 
 // ---- Feed ----
 function renderFeed(){
-  const feed = document.getElementById("feed");
-  if (!posts.length) { feed.innerHTML = `<div class="empty">Aucun post. Lance la discussion ! 🚀</div>`; return; }
-  feed.innerHTML = sortedPosts().map(p => `
-    <div class="post" onclick="openPost(${p.id})" tabindex="0" role="button" aria-label="Ouvrir le post" onkeydown="if(event.key==='Enter')openPost(${p.id})">
-      <div class="post-head">
-        <span class="avatar" aria-hidden="true">${esc(p.authorEmoji)}</span>
-        <div>
-          <strong>Anonyme ${esc(p.authorEmoji)}</strong><br>
-          <time>${new Date(p.date).toLocaleString("fr-FR")}</time>
-        </div>
-      </div>
-      <p>${escMultiline(p.text)}</p>
-      <div class="tags">
-        ${p.authorInterests.map(i => `<span class="tag">${esc(i)}</span>`).join("")}
-        ${(p.authorPersonality||[]).map(x => `<span class="tag">${esc(x)}</span>`).join("")}
-      </div>
-      <div onclick="event.stopPropagation();">
-        <button class="like ${p.likedBy.includes(me.id) ? "liked" : ""}" onclick="toggleLike(${p.id})" aria-label="Aimer ce post">
-          ${p.likedBy.includes(me.id) ? "❤️" : "🤍"} ${p.likes}
-        </button>
-        <button class="report-btn ${p.reportedBy?.includes(me.id) ? "reported" : ""}" onclick="reportPost(${p.id})" aria-label="Signaler ce post" ${p.reportedBy?.includes(me.id) ? "disabled" : ""}>
-          🚩 ${p.reportedBy?.includes(me.id) ? "Signalé" : "Signaler"}
-        </button>
-        ${p.authorId === me.id ? `<button class="delete-btn" onclick="event.stopPropagation(); deletePostSafe(${p.id})">🗑️ Supprimer</button>` : ""}
-      </div>
-    </div>`).join("");
+  var feed = document.getElementById("feed");
+  if (!posts.length) {
+    feed.innerHTML = '<div class="empty">Aucun post. Lance la discussion ! 🚀</div>';
+    return;
+  }
+  feed.innerHTML = "";
+  sortedPosts().forEach(function (p) {
+    var card = document.createElement("div");
+    card.className = "post";
+    card.tabIndex = 0;
+    card.setAttribute("role", "button");
+    card.setAttribute("aria-label", "Ouvrir le post");
+    card.innerHTML = postCardHTML(p, false);
+    // Bloque la propagation depuis la zone d'actions (likes / signaler / supprimer)
+    var actions = card.querySelector('[data-actions="1"]');
+    if (actions) actions.onclick = function (ev) { ev.stopPropagation(); };
+    card.onclick = function () { openPost(p.id); };
+    card.onkeydown = function (ev) { if (ev.key === "Enter") openPost(p.id); };
+    feed.appendChild(card);
+  });
 }
 
 // ---- Like : un seul par personne ----
 function toggleLike(id){
-  const p = posts.find(p => p.id === id);
+  var p = null;
+  for (var i = 0; i < posts.length; i++) { if (posts[i].id === id) { p = posts[i]; break; } }
   if (!p) return;
   p.likedBy = p.likedBy || [];
-  if (p.likedBy.includes(me.id)) {
-    p.likedBy = p.likedBy.filter(x => x !== me.id);
+  var idx = p.likedBy.indexOf(me.id);
+  if (idx !== -1) {
+    p.likedBy.splice(idx, 1);
     p.likes = Math.max(0, p.likes - 1);
   } else {
     p.likedBy.push(me.id);
     p.likes++;
   }
   savePosts();
-  const hash = location.hash;
-  if (hash.startsWith("#post/")) renderDetail();
+  if (location.hash.indexOf("#post/") === 0) renderDetail();
   else renderFeed();
 }
 
 // ---- Vue détail (page différente via #post/id) ----
 function openPost(id){ location.hash = "#post/" + id; showDetail(); }
 function showFeed(){
-  location.hash = "";
+  if (location.hash !== "") location.hash = "";
   document.getElementById("feedView").style.display = "block";
   document.getElementById("detailView").style.display = "none";
   renderFeed();
@@ -436,37 +466,17 @@ function showDetail(){
   renderDetail();
 }
 function renderDetail(){
-  const id = parseInt(location.hash.replace("#post/", ""));
-  const p = posts.find(p => p.id === id);
-  const container = document.getElementById("postDetail");
-  if (!p) { container.innerHTML = `<div class="empty">Post introuvable. 😕</div>`; return; }
-  container.innerHTML = `
-    <div class="card">
-      <div class="post-head">
-        <span class="avatar" style="font-size:3rem;" aria-hidden="true">${esc(p.authorEmoji)}</span>
-        <div>
-          <strong>Anonyme ${esc(p.authorEmoji)}</strong><br>
-          <time>${new Date(p.date).toLocaleString("fr-FR")}</time>
-        </div>
-      </div>
-      <p class="detail-text">${escMultiline(p.text)}</p>
-      <div class="tags">
-        ${p.authorInterests.map(i => `<span class="tag">${esc(i)}</span>`).join("")}
-        ${(p.authorPersonality||[]).map(x => `<span class="tag">${esc(x)}</span>`).join("")}
-      </div>
-      <button class="like ${p.likedBy.includes(me.id) ? "liked" : ""}" onclick="toggleLike(${p.id})">
-        ${p.likedBy.includes(me.id) ? "❤️" : "🤍"} ${p.likes} j'aime
-      </button>
-      <button class="report-btn ${p.reportedBy?.includes(me.id) ? "reported" : ""}" onclick="reportPost(${p.id})" ${p.reportedBy?.includes(me.id) ? "disabled" : ""}>
-        🚩 ${p.reportedBy?.includes(me.id) ? "Signalé" : "Signaler"}
-      </button>
-      ${p.authorId === me.id ? `<button class="delete-btn" onclick="deletePostSafe(${p.id})">🗑️ Supprimer mon post</button>` : ""}
-    </div>`;
+  var id = parseInt(location.hash.replace("#post/", ""), 10);
+  var p = null;
+  for (var i = 0; i < posts.length; i++) { if (posts[i].id === id) { p = posts[i]; break; } }
+  var container = document.getElementById("postDetail");
+  if (!p) { container.innerHTML = '<div class="empty">Post introuvable. 😕</div>'; return; }
+  container.innerHTML = '<div class="card">' + postCardHTML(p, true) + '</div>';
 }
 
 // Navigation via hash (retour navigateur supporté)
-window.addEventListener("hashchange", () => {
-  if (location.hash.startsWith("#post/")) showDetail();
+window.addEventListener("hashchange", function () {
+  if (location.hash.indexOf("#post/") === 0) showDetail();
   else showFeed();
 });
 
