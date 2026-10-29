@@ -298,34 +298,8 @@ function updateCounter(){
 }
 document.getElementById("postText").addEventListener("input", updateCounter);
 
-// ---- Supprimer un post (avec annulation) ----
-let undoTimer = null;
-function deletePost(id){
-  if (!confirm("Supprimer ce post ?")) return;
-  const removed = posts.find(p => p.id === id);
-  const removedIndex = posts.indexOf(removed);
-  posts = posts.filter(p => p.id !== id);
-  savePosts();
-  showFeed();
-  // Bandeau d'annulation (10 s)
-  const area = document.getElementById("undoArea");
-  area.innerHTML = `
-    <div class="undo-box" role="status">
-      <span>🗑️ Post supprimé.</span>
-      <button onclick="undoDelete(${removedIndex}, ${id})">↩️ Annuler</button>
-    </div>`;
-  clearTimeout(undoTimer);
-  undoTimer = setTimeout(() => { area.innerHTML = ""; }, 10000);
-}
-function undoDelete(index, id){
-  clearTimeout(undoTimer);
-  if (!posts.find(p => p.id === id)) {
-    posts.splice(index, 0, arguments.callee ? null : null); // non utilisé
-  }
-  document.getElementById("undoArea").innerHTML = "";
-}
-// Restauration simple : on garde une copie en mémoire
-let lastDeleted = null, lastIndex = 0;
+// ---- Supprimer un post (avec annulation 10 s) ----
+let undoTimer = null, lastDeleted = null, lastIndex = 0;
 function deletePostSafe(id){
   const idx = posts.findIndex(p => p.id === id);
   if (idx === -1) return;
