@@ -24,7 +24,8 @@
   .interests label { background:#0f172a; border:1px solid #334155; padding:6px 12px; border-radius:20px; cursor:pointer; font-size:.9rem; }
   .interests input { display:none; }
   .interests label:has(input:checked) { background:#38bdf8; color:#0f172a; font-weight:700; }
-  .post { background:#1e293b; border:1px solid #334155; border-radius:14px; padding:16px; margin-bottom:14px; }
+  .post { background:#1e293b; border:1px solid #334155; border-radius:14px; padding:16px; margin-bottom:14px; cursor:pointer; }
+  .post:hover { border-color:#38bdf8; }
   .post-head { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
   .avatar { font-size:1.8rem; }
   .tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
@@ -35,6 +36,13 @@
   .like { background:none; border:none; color:#e2e8f0; cursor:pointer; margin-top:8px; padding:4px 8px; font-size:.95rem; }
   .like:hover { color:#f472b6; }
   .empty { color:#64748b; text-align:center; padding:30px 0; }
+  .error-msg { color:#f87171; font-size:.85rem; margin-top:8px; display:none; }
+  .delete-btn { background:#334155; color:#f87171; border:none; padding:6px 12px; border-radius:8px; font-size:.85rem; cursor:pointer; margin-top:8px; }
+  .delete-btn:hover { background:#7f1d1d; color:#fff; }
+  .back-btn { background:#334155; color:#e2e8f0; }
+  .back-btn:hover { background:#475569; }
+  .detail-text { font-size:1.1rem; line-height:1.6; margin-top:10px; }
+  .like.liked { color:#f472b6; font-weight:700; }
 </style>
 </head>
 <body>
@@ -50,35 +58,39 @@
     <!-- Étape 1 : Emoji -->
     <div id="step1">
       <h2>1️⃣ Choisis ton emoji</h2>
-      <p style="color:#64748b; font-size:.9rem;">Il te représentera de façon anonyme sur le site.</p>
+      <p style="color:#64748b; font-size:.9rem;">Choisis un emoji dans la liste ou tape ton propre emoji / caractère.</p>
       <div class="emoji-picker" id="onboardEmojiPicker"></div>
-      <button id="btnStep1" style="display:none;" onclick="goStep(2)">Continuer →</button>
+      <input type="text" id="customEmoji" maxlength="4" placeholder="Ou tape ton emoji / caractère ici (ex : 🐉 ou ★)" style="margin-top:12px;">
+      <p class="error-msg" id="errStep1">⚠️ Veuillez sélectionner un emoji ou en saisir un.</p>
+      <button onclick="validateStep1()">Continuer →</button>
     </div>
 
     <!-- Étape 2 : Centres d'intérêt -->
     <div id="step2" style="display:none;">
       <h2>2️⃣ Tes centres d'intérêt</h2>
-      <p style="color:#64748b; font-size:.9rem;">Ils seront affichés sur chacun de tes posts.</p>
+      <p style="color:#64748b; font-size:.9rem;">Sélectionne au moins un centre d'intérêt. Ils seront affichés sur chacun de tes posts.</p>
       <div class="interests" id="onboardInterestPicker"></div>
-      <button onclick="goStep(3)">Continuer →</button>
-      <button style="background:#334155; color:#e2e8f0;" onclick="goStep(3)">Passer</button>
+      <p class="error-msg" id="errStep2">⚠️ Veuillez sélectionner au moins un centre d'intérêt.</p>
+      <button onclick="validateStep2()">Continuer →</button>
     </div>
 
     <!-- Étape 3 : Personnalité -->
     <div id="step3" style="display:none;">
       <h2>3️⃣ Ta personnalité</h2>
-      <p style="color:#64748b; font-size:.9rem;">Choisis ce qui te correspond le mieux.</p>
+      <p style="color:#64748b; font-size:.9rem;">Sélectionne au moins un trait de personnalité.</p>
       <div class="interests" id="onboardPersonalityPicker"></div>
+      <p class="error-msg" id="errStep3">⚠️ Veuillez sélectionner au moins une personnalité.</p>
       <button onclick="finishOnboarding()">🚀 Entrer dans le feed</button>
-      <button style="background:#334155; color:#e2e8f0;" onclick="finishOnboarding()">Passer</button>
     </div>
   </div>
 </div>
 
-<!-- ================= APPLICATION (FEED) ================= -->
+<!-- ================= APPLICATION (FEED + DÉTAIL) ================= -->
 <div id="app" style="display:none;">
   <div class="container" style="grid-template-columns:1fr;">
-    <main>
+
+    <!-- Vue Feed -->
+    <main id="feedView">
       <div class="card">
         <h2>✍️ Créer un post</h2>
         <textarea id="postText" rows="3" placeholder="Quoi de neuf ?"></textarea>
@@ -87,6 +99,13 @@
       <h2>📰 Feed</h2>
       <div id="feed"></div>
     </main>
+
+    <!-- Vue Détail d'un post -->
+    <main id="detailView" style="display:none;">
+      <button class="back-btn" onclick="showFeed()">← Retour au feed</button>
+      <div id="postDetail" style="margin-top:16px;"></div>
+    </main>
+
   </div>
 </div>
 
@@ -99,7 +118,7 @@ const PERSONALITIES = ["Extraverti","Introverti","Rigolo","Sérieux","Curieux","
 const ME_KEY = "emojitalk_me";
 const POSTS_KEY = "emojitalk_posts";
 
-let me = JSON.parse(localStorage.getItem(ME_KEY) || '{"emoji":"🙂","interests":[],"personality":[]}');
+let me = JSON.parse(localStorage.getItem(ME_KEY) || '{"emoji":"","interests":[],"personality":[]}');
 let posts = JSON.parse(localStorage.getItem(POSTS_KEY) || "[]");
 
 // Identifiant anonyme persistant
@@ -117,9 +136,16 @@ EMOJIS.forEach(e => {
   b.textContent = e;
   b.onclick = () => {
     me.emoji = e; saveMe();
-    document.getElementById("btnStep1").style.display = "inline-block";
+    document.getElementById("customEmoji").value = "";
+    document.getElementById("errStep1").style.display = "none";
   };
   onboardEmojiPicker.appendChild(b);
+});
+
+// Champ libre emoji
+document.getElementById("customEmoji").addEventListener("input", ev => {
+  const v = ev.target.value.trim();
+  if (v) { me.emoji = v; saveMe(); document.getElementById("errStep1").style.display = "none"; }
 });
 
 // Sélecteur de centres d'intérêt (onboarding)
@@ -131,6 +157,7 @@ INTERESTS.forEach(i => {
     if (ev.target.checked) me.interests.push(i);
     else me.interests = me.interests.filter(x => x !== i);
     saveMe();
+    document.getElementById("errStep2").style.display = "none";
   };
   onboardInterestPicker.appendChild(label);
 });
@@ -145,9 +172,37 @@ PERSONALITIES.forEach(p => {
     if (ev.target.checked) me.personality.push(p);
     else me.personality = me.personality.filter(x => x !== p);
     saveMe();
+    document.getElementById("errStep3").style.display = "none";
   };
   onboardPersonalityPicker.appendChild(label);
 });
+
+// ---- Validation des étapes (impossible de passer) ----
+function validateStep1(){
+  if (!me.emoji || !me.emoji.trim()) {
+    document.getElementById("errStep1").style.display = "block";
+    return;
+  }
+  goStep(2);
+}
+
+function validateStep2(){
+  if (!me.interests.length) {
+    document.getElementById("errStep2").style.display = "block";
+    return;
+  }
+  goStep(3);
+}
+
+function finishOnboarding(){
+  if (!(me.personality || []).length) {
+    document.getElementById("errStep3").style.display = "block";
+    return;
+  }
+  onboardDone = true;
+  localStorage.setItem("emojitalk_onboarded", "1");
+  showApp();
+}
 
 function goStep(n){
   document.getElementById("step1").style.display = n === 1 ? "block" : "none";
@@ -155,16 +210,10 @@ function goStep(n){
   document.getElementById("step3").style.display = n === 3 ? "block" : "none";
 }
 
-function finishOnboarding(){
-  onboardDone = true;
-  localStorage.setItem("emojitalk_onboarded", "1");
-  showApp();
-}
-
 function showApp(){
   document.getElementById("onboarding").style.display = "none";
   document.getElementById("app").style.display = "block";
-  renderFeed();
+  showFeed();
 }
 
 // ---- Créer un post ----
@@ -179,11 +228,22 @@ function createPost(){
     authorPersonality: [...(me.personality || [])],
     text,
     likes: 0,
+    likedBy: [],
     date: Date.now()
   });
   savePosts();
   document.getElementById("postText").value = "";
-  renderFeed();
+  const hash = location.hash;
+  if (hash.startsWith("#post/")) showFeed();
+  else { renderFeed(); renderDetail(); }
+}
+
+// ---- Supprimer un post ----
+function deletePost(id){
+  if (!confirm("Supprimer ce post ?")) return;
+  posts = posts.filter(p => p.id !== id);
+  savePosts();
+  showFeed();
 }
 
 // ---- Feed ----
@@ -191,7 +251,7 @@ function renderFeed(){
   const feed = document.getElementById("feed");
   if (!posts.length) { feed.innerHTML = `<div class="empty">Aucun post. Lance la discussion ! 🚀</div>`; return; }
   feed.innerHTML = posts.map(p => `
-    <div class="post">
+    <div class="post" onclick="openPost(${p.id})">
       <div class="post-head">
         <span class="avatar">${p.authorEmoji}</span>
         <div>
@@ -204,14 +264,86 @@ function renderFeed(){
         ${p.authorInterests.map(i => `<span class="tag">${i}</span>`).join("")}
         ${(p.authorPersonality||[]).map(x => `<span class="tag">${x}</span>`).join("")}
       </div>
-      <button class="like" onclick="like(${p.id})">❤️ ${p.likes}</button>
+      <div onclick="event.stopPropagation();">
+        <button class="like ${p.likedBy.includes(me.id) ? "liked" : ""}" onclick="toggleLike(${p.id})">
+          ${p.likedBy.includes(me.id) ? "❤️" : "🤍"} ${p.likes}
+        </button>
+        ${p.authorId === me.id ? `<button class="delete-btn" onclick="event.stopPropagation(); deletePost(${p.id})">🗑️ Supprimer</button>` : ""}
+      </div>
     </div>`).join("");
 }
 
-function like(id){
+// ---- Like : un seul par personne ----
+function toggleLike(id){
   const p = posts.find(p => p.id === id);
-  if (p){ p.likes++; savePosts(); renderFeed(); }
+  if (!p) return;
+  p.likedBy = p.likedBy || [];
+  if (p.likedBy.includes(me.id)) {
+    p.likedBy = p.likedBy.filter(x => x !== me.id);
+    p.likes = Math.max(0, p.likes - 1);
+  } else {
+    p.likedBy.push(me.id);
+    p.likes++;
+  }
+  savePosts();
+  const hash = location.hash;
+  if (hash.startsWith("#post/")) renderDetail();
+  else renderFeed();
 }
+
+// ---- Vue détail (page différente via #post/id) ----
+function openPost(id){
+  location.hash = "#post/" + id;
+  showDetail();
+}
+
+function showFeed(){
+  location.hash = "";
+  document.getElementById("feedView").style.display = "block";
+  document.getElementById("detailView").style.display = "none";
+  renderFeed();
+}
+
+function showDetail(){
+  document.getElementById("feedView").style.display = "none";
+  document.getElementById("detailView").style.display = "block";
+  renderDetail();
+}
+
+function renderDetail(){
+  const id = parseInt(location.hash.replace("#post/", ""));
+  const p = posts.find(p => p.id === id);
+  const container = document.getElementById("postDetail");
+  if (!p) {
+    container.innerHTML = `<div class="empty">Post introuvable. 😕</div>`;
+    return;
+  }
+  container.innerHTML = `
+    <div class="card">
+      <div class="post-head">
+        <span class="avatar" style="font-size:3rem;">${p.authorEmoji}</span>
+        <div>
+          <strong>Anonyme ${p.authorEmoji}</strong><br>
+          <time>${new Date(p.date).toLocaleString("fr-FR")}</time>
+        </div>
+      </div>
+      <p class="detail-text">${p.text.replace(/</g,"&lt;").replace(/\n/g,"<br>")}</p>
+      <div class="tags">
+        ${p.authorInterests.map(i => `<span class="tag">${i}</span>`).join("")}
+        ${(p.authorPersonality||[]).map(x => `<span class="tag">${x}</span>`).join("")}
+      </div>
+      <button class="like ${p.likedBy.includes(me.id) ? "liked" : ""}" onclick="toggleLike(${p.id})">
+        ${p.likedBy.includes(me.id) ? "❤️" : "🤍"} ${p.likes} j'aime
+      </button>
+      ${p.authorId === me.id ? `<button class="delete-btn" onclick="deletePost(${p.id})">🗑️ Supprimer mon post</button>` : ""}
+    </div>`;
+}
+
+// Navigation via hash (retour navigateur supporté)
+window.addEventListener("hashchange", () => {
+  if (location.hash.startsWith("#post/")) showDetail();
+  else showFeed();
+});
 
 // ---- Démarrage ----
 if (onboardDone) showApp(); else goStep(1);
