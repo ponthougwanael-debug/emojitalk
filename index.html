@@ -158,6 +158,19 @@ const POSTS_KEY = "emojitalk_posts";
 let me = JSON.parse(localStorage.getItem(ME_KEY) || '{"emoji":"","interests":[],"personality":[]}');
 let posts = JSON.parse(localStorage.getItem(POSTS_KEY) || "[]");
 
+// ---- Migration : anciens posts sans likedBy / reports (évite un plantage au rendu) ----
+let migrationNeeded = false;
+posts = posts.map(p => {
+  const fixed = { likedBy: [], reports: 0, reportedBy: [], ...p };
+  if (fixed.likes > 0 && fixed.likedBy.length === 0) {
+    // On ne connaît pas les anciens likers : on met likes à 0 pour repartir proprement
+    fixed.likes = 0;
+  }
+  if (JSON.stringify(fixed) !== JSON.stringify(p)) migrationNeeded = true;
+  return fixed;
+});
+if (migrationNeeded) savePosts();
+
 // Identifiant anonyme persistant
 if (!me.id) { me.id = "anon-" + Math.random().toString(36).slice(2, 9); saveMe(); }
 function saveMe(){ localStorage.setItem(ME_KEY, JSON.stringify(me)); }
