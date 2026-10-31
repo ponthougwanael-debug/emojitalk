@@ -94,12 +94,14 @@ function showToast(message, type){
 
 /* ============================================================
    4. STOCKAGE LOCAL (localStorage)
-   NOTE : chaque visiteur ne voit que SES posts. Pour un vrai feed
-   partagé, il faudra brancher un backend (ex : Supabase).
+   NOTE : chaque visiteur ne voit que SES posts et SES messages.
+   Pour un vrai partage entre visiteurs, il faudra un backend
+   (ex : Supabase).
    ============================================================ */
 
 var ME_KEY    = "emojitalk_me";     // profil de l'utilisateur courant
 var POSTS_KEY = "emojitalk_posts";  // liste des posts
+var MSGS_KEY  = "emojitalk_msgs";   // conversations privées
 
 // Chargement du profil (valeurs par défaut si première visite)
 var me = JSON.parse(localStorage.getItem(ME_KEY) || '{"emoji":"","interests":[],"personality":[]}');
@@ -109,6 +111,10 @@ if (!me.personality) me.personality = [];
 // Chargement des posts (tableau vide si première visite / donnée corrompue)
 var posts = JSON.parse(localStorage.getItem(POSTS_KEY) || "[]");
 if (!Array.isArray(posts)) posts = [];
+
+// Chargement des conversations : objet { peerId: {peerPseudo, peerEmoji, messages:[]} }
+var convs = JSON.parse(localStorage.getItem(MSGS_KEY) || "{}");
+if (typeof convs !== "object" || convs === null || Array.isArray(convs)) convs = {};
 
 /**
  * Migration : complète les anciens posts qui n'ont pas les nouveaux
@@ -127,6 +133,8 @@ posts.forEach(function (p) {
 function saveMe(){ localStorage.setItem(ME_KEY, JSON.stringify(me)); }
 /** Sauvegarde les posts dans localStorage */
 function savePosts(){ localStorage.setItem(POSTS_KEY, JSON.stringify(posts)); }
+/** Sauvegarde les conversations privées dans localStorage */
+function saveConvs(){ localStorage.setItem(MSGS_KEY, JSON.stringify(convs)); }
 if (migrationNeeded) savePosts();
 
 // Identifiant anonyme persistant : sert à mémoriser les likes/signalements
@@ -267,7 +275,7 @@ function goStep(n){
 function showApp(){
   document.getElementById("onboarding").style.display = "none";
   document.getElementById("app").style.display = "block";
-  showFeed();
+  navTo("feed");
 }
 
 /* ============================================================
@@ -478,6 +486,10 @@ function postCardHTML(p, isDetail){
   h += '<div data-actions="1">';
   h += '<button type="button" class="like' + (liked ? " liked" : "") + '" onclick="toggleLike(' + p.id + ')" aria-label="Aimer ce post">' + (liked ? "❤️" : "🤍") + " " + p.likes + (isDetail ? " j'aime" : "") + '</button>';
   h += '<button type="button" class="report-btn' + (reported ? " reported" : "") + '" onclick="reportPost(' + p.id + ')" aria-label="Signaler ce post"' + (reported ? " disabled" : "") + '>🚩 ' + (reported ? "Signalé" : "Signaler") + '</button>';
+  // Bouton message privé : uniquement pour les posts des AUTRES
+  if (p.authorId !== me.id) {
+    h += '<button type="button" class="mp-btn" onclick="startConv(\'' + p.authorId + '\')">💬 MP</button>';
+  }
   // Bouton supprimer : uniquement pour l'auteur du post
   if (p.authorId === me.id) {
     h += '<button type="button" class="delete-btn" onclick="deletePostSafe(' + p.id + ')">🗑️ ' + (isDetail ? "Supprimer mon post" : "Supprimer") + '</button>';
@@ -510,7 +522,7 @@ function renderFeed(){
     card.setAttribute("aria-label", "Ouvrir le post");
     card.innerHTML = postCardHTML(p, false);
 
-    // Un clic sur like / signaler / supprimer ne doit PAS ouvrir le post
+    // Un clic sur like / signaler / MP / supprimer ne doit PAS ouvrir le post
     var actions = card.querySelector('[data-actions="1"]');
     if (actions) actions.onclick = function (ev) { ev.stopPropagation(); };
 
@@ -547,11 +559,12 @@ function toggleLike(id){
 }
 
 /* ============================================================
-   13. NAVIGATION FEED ⇄ DÉTAIL (via le hash d'URL)
-   #post/<id> = page détail, hash vide = feed.
-   Le bouton retour du navigateur fonctionne grâce à hashchange.
+   13. NAVIGATION : BARRE DU BAS + FEED ⇄ DÉTAIL
+   La bottom-nav bascule entre feed / messages / paramètres.
+   Le hash #post/<id> ouvre le détail d'un post depuis le feed.
    ============================================================ */
 
+/** Ouvre un post en vue détail */
 function openPost(id){ location.hash = "#post/" + id; showDetail(); }
 
 /** Affiche le feed et efface le hash */
@@ -579,14 +592,277 @@ function renderDetail(){
   container.innerHTML = '<div class="card">' + postCardHTML(p, true) + '</div>';
 }
 
+/**
+ * Bascule entre les grandes vues via la barre du bas.
+ * @param {string} view - "feed" | "messages" | "settings"
+ */
+function navTo(view){
+  // Un détail de post ouvert ne garde son sens que dans le feed
+  if (view !== "feed" || location.hash.indexOf("#post/") !== 0) {
+    if (location.hash !== "") { location.hash = ""; return; } // hashchange relance navTo("feed")
+  }
+
+  // Montre la vue demandée, cache les autres
+  document.getElementById("feedView").style.display      = view === "feed"      ? "block" : "none";
+  document.getElementById("detailView").style.display    = "none";
+  document.getElementById("messagesView").style.display  = view === "messages"  ? "block" : "none";
+  document.getElementById("settingsView").style.display  = view === "settings"  ? "block" : "none";
+
+  // Met à jour l'état actif de la barre du bas
+  var buttons = document.querySelectorAll("#bottomNav button");
+  for (var i = 0; i < buttons.length; i++) {
+    buttons[i].classList.toggle("active", buttons[i].getAttribute("data-view") === view);
+  }
+
+  if (view === "feed") renderFeed();
+  if (view === "messages") { closeChat(); renderConvs(); }
+  if (view === "settings") buildSettings();
+}
+
 // Réagit aux boutons précédent/suivant du navigateur
 window.addEventListener("hashchange", function () {
   if (location.hash.indexOf("#post/") === 0) showDetail();
-  else showFeed();
+  else navTo("feed");
 });
 
 /* ============================================================
-   14. DÉMARRAGE
+   14. MESSAGES PRIVÉS
+   Conversations stockées localement : convs[peerId] = {
+   peerPseudo, peerEmoji, messages: [{from:"me"|"peer", text, date}] }.
+   On démarre une conversation via le bouton "💬 MP" d'un post.
+   ============================================================ */
+
+var currentPeer = null; // id de la personne avec qui on discute
+
+/**
+ * Ouvre (ou crée) la conversation avec un auteur de post.
+ * @param {string} peerId - auteurId du post
+ */
+function startConv(peerId){
+  // Retrouve les infos d'affichage (pseudo, emoji) depuis ses posts
+  var info = null;
+  for (var i = 0; i < posts.length; i++) {
+    if (posts[i].authorId === peerId) { info = posts[i]; break; }
+  }
+  if (!info) { showToast("Impossible de trouver cette personne. 😕", "error"); return; }
+
+  if (!convs[peerId]) {
+    convs[peerId] = { peerPseudo: info.authorPseudo, peerEmoji: info.authorEmoji, messages: [] };
+    saveConvs();
+  }
+  currentPeer = peerId;
+  navTo("messages");
+  openChat(peerId);
+}
+
+/** Liste des conversations, triée par dernier message */
+function renderConvs(){
+  var list = document.getElementById("convList");
+  var ids = Object.keys(convs);
+  if (!ids.length) {
+    list.innerHTML = '<div class="empty">Aucune conversation.<br>Clique sur « 💬 MP » sous un post pour en commencer une ! 💌</div>';
+    return;
+  }
+  // Tri : conversation avec le message le plus récent en premier
+  ids.sort(function (a, b) {
+    var la = convs[a].messages.length ? convs[a].messages[convs[a].messages.length - 1].date : 0;
+    var lb = convs[b].messages.length ? convs[b].messages[convs[b].messages.length - 1].date : 0;
+    return lb - la;
+  });
+
+  list.innerHTML = "";
+  ids.forEach(function (id) {
+    var c = convs[id];
+    var last = c.messages.length ? c.messages[c.messages.length - 1] : null;
+    var item = document.createElement("div");
+    item.className = "conv-item";
+    item.tabIndex = 0;
+    item.setAttribute("role", "button");
+    item.innerHTML =
+      '<span class="avatar">' + esc(c.peerEmoji) + '</span>' +
+      '<div class="conv-info"><strong>' + esc(c.peerPseudo) + '</strong>' +
+      '<span class="conv-last">' + (last ? esc(last.text) : "Nouvelle conversation") + '</span></div>' +
+      '<button type="button" class="delete-btn" onclick="deleteConv(event, \'' + id + '\')" aria-label="Supprimer la conversation">🗑️</button>';
+    item.onclick = function () { openChat(id); };
+    item.onkeydown = function (ev) { if (ev.key === "Enter") openChat(id); };
+    // Le clic sur la corbeille ne doit pas ouvrir la conversation
+    var del = item.querySelector(".delete-btn");
+    del.onclick = function (ev) { ev.stopPropagation(); deleteConv(id); };
+    list.appendChild(item);
+  });
+}
+
+/** Supprime une conversation entière */
+function deleteConv(id){
+  delete convs[id];
+  if (currentPeer === id) currentPeer = null;
+  saveConvs();
+  renderConvs();
+  closeChat();
+  showToast("🗑️ Conversation supprimée.");
+}
+
+/** Affiche le salon de discussion avec un correspondant */
+function openChat(peerId){
+  var c = convs[peerId];
+  if (!c) return;
+  currentPeer = peerId;
+
+  document.getElementById("convList").style.display = "none";
+  document.getElementById("chatArea").style.display = "block";
+  document.getElementById("chatHead").innerHTML =
+    '<span class="avatar">' + esc(c.peerEmoji) + '</span> <strong>' + esc(c.peerPseudo) + '</strong>';
+
+  renderChatMessages();
+  var input = document.getElementById("msgInput");
+  input.value = "";
+  input.focus();
+}
+
+/** Retour à la liste des conversations */
+function closeChat(){
+  currentPeer = null;
+  document.getElementById("convList").style.display = "block";
+  document.getElementById("chatArea").style.display = "none";
+}
+
+/** Rend les bulles de messages du salon ouvert */
+function renderChatMessages(){
+  var c = convs[currentPeer];
+  if (!c) return;
+  var box = document.getElementById("chatMessages");
+  if (!c.messages.length) {
+    box.innerHTML = '<div class="empty">Dis bonjour à ' + esc(c.peerPseudo) + ' ! 👋</div>';
+    return;
+  }
+  box.innerHTML = "";
+  c.messages.forEach(function (m) {
+    var b = document.createElement("div");
+    b.className = "bubble " + (m.from === "me" ? "mine" : "theirs");
+    b.innerHTML = escMultiline(m.text) + '<time>' + relativeDate(m.date) + '</time>';
+    box.appendChild(b);
+  });
+  // Fais défiler jusqu'au dernier message
+  box.scrollTop = box.scrollHeight;
+}
+
+/** Envoie le message saisi au correspondant courant */
+function sendMessage(){
+  var input = document.getElementById("msgInput");
+  var text = input.value.trim();
+  var c = convs[currentPeer];
+  if (!c) return;
+  if (!text) { showToast("Écris un message ! 🙂", "error"); return; }
+  if (containsBanned(text)) { showToast("🚫 Mots inappropriés détectés.", "error"); return; }
+
+  c.messages.push({ from: "me", text: text, date: Date.now() });
+  saveConvs();
+  input.value = "";
+  renderChatMessages();
+  renderConvs();
+}
+
+// Entrée = envoyer le message
+document.getElementById("msgInput").addEventListener("keydown", function (ev) {
+  if (ev.key === "Enter") { ev.preventDefault(); sendMessage(); }
+});
+
+/* ============================================================
+   15. PARAMÈTRES : MODIFIER SON PROFIL
+   ============================================================ */
+
+/**
+ * Construit les sélecteurs de la page Paramètres à partir du
+ * profil actuel (emoji, intérêts, personnalité).
+ */
+function buildSettings(){
+  // Travail sur une copie : rien n'est sauvegardé avant "Enregistrer"
+  var draft = {
+    emoji: me.emoji,
+    interests: me.interests.slice(),
+    personality: (me.personality || []).slice()
+  };
+
+  document.getElementById("settingsPseudo").textContent = me.pseudo;
+  document.getElementById("errSettings").style.display = "none";
+
+  // --- Sélecteur d'emoji ---
+  var picker = document.getElementById("settingsEmojiPicker");
+  picker.innerHTML = "";
+  EMOJIS.forEach(function (e) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.textContent = e;
+    if (e === draft.emoji) b.classList.add("selected");
+    b.onclick = function () {
+      draft.emoji = e;
+      document.getElementById("settingsCustomEmoji").value = "";
+      picker.querySelectorAll(".selected").forEach(function (x) { x.classList.remove("selected"); });
+      b.classList.add("selected");
+    };
+    picker.appendChild(b);
+  });
+
+  var custom = document.getElementById("settingsCustomEmoji");
+  custom.value = EMOJIS.indexOf(draft.emoji) !== -1 ? "" : draft.emoji;
+  custom.oninput = function (ev) {
+    var clean = ev.target.value.replace(/[<>"'`&]/g, "").trim();
+    ev.target.value = clean;
+    if (clean) {
+      draft.emoji = clean;
+      picker.querySelectorAll(".selected").forEach(function (x) { x.classList.remove("selected"); });
+    }
+  };
+
+  // --- Cases à cocher centres d'intérêt ---
+  var ip = document.getElementById("settingsInterestPicker");
+  ip.innerHTML = "";
+  INTERESTS.forEach(function (i) {
+    buildCheckbox(ip, i, draft.interests.indexOf(i) !== -1, function (ev) {
+      if (ev.target.checked) draft.interests.push(i);
+      else draft.interests = draft.interests.filter(function (x) { return x !== i; });
+    });
+  });
+
+  // --- Cases à cocher personnalité ---
+  var pp = document.getElementById("settingsPersonalityPicker");
+  pp.innerHTML = "";
+  PERSONALITIES.forEach(function (p) {
+    buildCheckbox(pp, p, draft.personality.indexOf(p) !== -1, function (ev) {
+      if (ev.target.checked) draft.personality.push(p);
+      else draft.personality = draft.personality.filter(function (x) { return x !== p; });
+    });
+  });
+
+  // Le bouton "Enregistrer" validera ce brouillon
+  document.getElementById("settingsSaveHolder").setAttribute("data-draft", "1");
+  window._settingsDraft = draft;
+}
+
+/** Valide et applique les modifications du profil */
+function saveSettings(){
+  var d = window._settingsDraft || { emoji: me.emoji, interests: me.interests.slice(), personality: (me.personality || []).slice() };
+  if (!d.emoji || !d.emoji.trim()) { document.getElementById("errSettings").style.display = "block"; return; }
+  if (!d.interests.length || !d.personality.length) {
+    document.getElementById("errSettings").style.display = "block";
+    return;
+  }
+  me.emoji = d.emoji;
+  me.interests = d.interests;
+  me.personality = d.personality;
+  saveMe();
+  showToast("✅ Profil mis à jour !", "success");
+  buildSettings(); // resynchronise l'affichage
+}
+
+/** Efface le profil et relance l'onboarding (les posts sont gardés) */
+function resetOnboarding(){
+  localStorage.removeItem("emojitalk_onboarded");
+  location.reload();
+}
+
+/* ============================================================
+   16. DÉMARRAGE
    Onboarding si première visite, sinon on arrive directement
    sur le feed.
    ============================================================ */
