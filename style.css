@@ -24,6 +24,7 @@ button:active { transform:scale(.95); }   /* micro-feedback à l'appui */
 .emoji-picker { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
 .emoji-picker button { margin:0; padding:6px 10px; background:#0f172a; font-size:1.3rem; border:1px solid #334155; transition:transform .15s, border-color .2s; }
 .emoji-picker button:hover { border-color:#38bdf8; transform:scale(1.2) rotate(-5deg); } /* l'emoji "saute" au survol */
+.emoji-picker button.selected { border-color:#38bdf8; background:#0f172a; box-shadow:0 0 0 2px rgba(56,189,248,.4); } /* emoji choisi dans les paramètres */
 
 /* ---------- Centres d'intérêt / personnalité ---------- */
 .interests { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
@@ -70,6 +71,8 @@ button:active { transform:scale(.95); }   /* micro-feedback à l'appui */
 .report-btn { background:none; border:none; color:#64748b; cursor:pointer; margin-top:8px; padding:4px 8px; font-size:.85rem; }
 .report-btn:hover { color:#fbbf24; }
 .report-btn.reported { color:#fbbf24; }
+.mp-btn { background:none; border:1px solid #334155; color:#38bdf8; cursor:pointer; margin-top:8px; padding:4px 10px; font-size:.85rem; border-radius:8px; transition:all .2s; }
+.mp-btn:hover { border-color:#38bdf8; background:rgba(56,189,248,.1); }
 .delete-btn { background:#334155; color:#f87171; border:none; padding:6px 12px; border-radius:8px; font-size:.85rem; cursor:pointer; margin-top:8px; }
 .delete-btn:hover { background:#7f1d1d; color:#fff; }
 
@@ -83,7 +86,7 @@ button:active { transform:scale(.95); }   /* micro-feedback à l'appui */
 .search-input input { padding-left:36px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:10px center; }
 
 /* ---------- Notifications toast (remplacent les alert) ---------- */
-.toast-container { position:fixed; bottom:20px; right:20px; z-index:100; display:flex; flex-direction:column; gap:8px; }
+.toast-container { position:fixed; bottom:90px; right:20px; z-index:100; display:flex; flex-direction:column; gap:8px; }
 .toast { background:#1e293b; border:1px solid #38bdf8; color:#e2e8f0; padding:12px 18px; border-radius:10px; box-shadow:0 4px 14px rgba(0,0,0,.5); animation:slideIn .3s ease; font-size:.95rem; max-width:320px; }
 .toast.success { border-color:#4ade80; }
 .toast.error { border-color:#f87171; }
@@ -104,3 +107,133 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, .post:focus-v
   outline:2px solid #38bdf8; outline-offset:2px;
 }
 .undo-box { background:#1e293b; border:1px solid #38bdf8; border-radius:10px; padding:10px 16px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; }
+
+/* ============================================================
+   BARRE DE NAVIGATION (bottom-nav)
+   Fixe en bas, transparente avec flou ("effet verre") :
+   backdrop-filter floute ce qui passe derrière.
+   ============================================================ */
+.bottom-nav {
+  position: fixed;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 22px;
+  background: rgba(30, 41, 59, 0.55);          /* bleu nuit semi-transparent */
+  backdrop-filter: blur(14px);                  /* flou du contenu derrière */
+  -webkit-backdrop-filter: blur(14px);          /* compatibilité Safari */
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  z-index: 50;
+}
+.bottom-nav button {
+  background: transparent;
+  color: #94a3b8;
+  border: none;
+  border-radius: 16px;
+  padding: 8px 20px;
+  margin: 0;
+  font-size: .8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  transition: background .2s, color .2s, transform .15s;
+}
+.bottom-nav button:hover { background: rgba(56, 189, 248, .12); color: #e2e8f0; }
+.bottom-nav button.active { background: rgba(56, 189, 248, .22); color: #38bdf8; }
+.bottom-nav .nav-icon { font-size: 1.25rem; line-height: 1; }
+
+/* Espace sous le contenu pour ne pas être caché par la barre */
+#app .container { padding-bottom: 100px; }
+
+/* ============================================================
+   MESSAGES PRIVÉS : liste des conversations + salon de chat
+   ============================================================ */
+
+/* --- Liste des conversations --- */
+.conv-item {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 14px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: border-color .2s, transform .2s;
+}
+.conv-item:hover { border-color: #38bdf8; transform: translateY(-2px); }
+.conv-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.conv-last {
+  color: #64748b;
+  font-size: .85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;   /* aperçu du dernier message sur une ligne */
+}
+.conv-item .delete-btn { margin: 0; flex-shrink: 0; }
+
+/* --- Salon de discussion --- */
+.chat-head {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 14px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.chat-messages {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 14px;
+  padding: 16px;
+  height: 55vh;
+  overflow-y: auto;        /* défilement des messages */
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+/* Bulles de messages, style application de messagerie */
+.bubble {
+  max-width: 75%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: .95rem;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  white-space: pre-wrap;
+  animation: fadeUp .25s ease both;
+}
+.bubble time { display: block; font-size: .7rem; margin-top: 4px; opacity: .7; }
+.bubble.mine {
+  align-self: flex-end;                       /* mes messages à droite */
+  background: #38bdf8;
+  color: #0f172a;
+  border-bottom-right-radius: 4px;            /* petite "queue" */
+}
+.bubble.mine time { color: #0f172a; }
+.bubble.theirs {
+  align-self: flex-start;                     /* leurs messages à gauche */
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #e2e8f0;
+  border-bottom-left-radius: 4px;
+}
+.bubble.theirs time { color: #64748b; }
+
+/* --- Zone de saisie du chat --- */
+.chat-input { display: flex; gap: 8px; }
+.chat-input input { flex: 1; }
+.chat-input button { margin: 0; padding: 10px 16px; }
