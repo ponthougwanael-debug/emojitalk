@@ -11,14 +11,16 @@
   <!-- Le style est séparé dans style.css pour la lisibilité et la mise en cache -->
   <link rel="stylesheet" href="style.css">
   <!--
-    La logique JavaScript est séparée en deux fichiers :
-    - script.js : le cœur du site (posts, likes, MPs, paramètres...)
-    - a11y.js   : améliorations d'accessibilité (focus des vues,
+    La logique JavaScript est séparée en trois fichiers :
+    - script.js  : le cœur du site (posts, likes, MPs, paramètres...)
+    - profile.js : identité par emoji + fiche profil au clic sur l'avatar
+    - a11y.js    : améliorations d'accessibilité (focus des vues,
                   aria-current, état vide des conversations)
     L'attribut "defer" garantit que les scripts s'exécutent APRÈS le
     chargement du HTML (sinon les getElementById échoueraient).
   -->
   <script src="script.js" defer></script>
+  <script src="profile.js" defer></script>
   <script src="a11y.js" defer></script>
 </head>
 <body>
@@ -48,7 +50,7 @@
     <!-- Étape 1 : Emoji (liste prédéfinie OU champ libre) -->
     <div id="step1">
       <h2>1️⃣ Choisis ton emoji</h2>
-      <p style="color:#94a3b8; font-size:.9rem;">Choisis un emoji dans la liste ou tape ton propre emoji / caractère.</p>
+      <p style="color:#94a3b8; font-size:.9rem;">Choisis un emoji dans la liste ou tape ton propre emoji / caractère. Ton emoji sera ton identité unique sur le site.</p>
       <div class="emoji-picker" id="onboardEmojiPicker" role="group" aria-label="Sélection d'emoji"></div>
       <input type="text" id="customEmoji" maxlength="4" placeholder="Ou tape ton emoji / caractère ici (ex : 🐉 ou ★)" style="margin-top:12px;" aria-label="Emoji personnalisé">
       <p class="error-msg" id="errStep1" role="alert">⚠️ Veuillez sélectionner un emoji ou en saisir un.</p>
@@ -146,7 +148,7 @@
     <main id="settingsView" style="display:none;">
       <div class="card">
         <h2>⚙️ Paramètres</h2>
-        <p style="color:#94a3b8; font-size:.9rem;">Ton pseudo anonyme : <strong id="settingsPseudo" style="color:#38bdf8;"></strong></p>
+        <p style="color:#94a3b8; font-size:.9rem;">Ton identité : <strong id="settingsPseudo" style="color:#38bdf8;"></strong></p>
 
         <h2 style="margin-top:20px;">😀 Ton emoji</h2>
         <div class="emoji-picker" id="settingsEmojiPicker" role="group" aria-label="Sélection d'emoji"></div>
