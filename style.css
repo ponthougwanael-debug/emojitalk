@@ -147,6 +147,8 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, .post:focus-v
   border: 1px solid rgba(56, 189, 248, 0.25);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
   z-index: 50;
+  /* FIX MOBILE : jamais plus large que l'écran, même sur 320px */
+  max-width: calc(100vw - 16px);
 }
 .bottom-nav button {
   background: transparent;
@@ -168,6 +170,15 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, .post:focus-v
 .bottom-nav button:hover { background: rgba(56, 189, 248, .12); color: #e2e8f0; }
 .bottom-nav button.active { background: rgba(56, 189, 248, .22); color: #38bdf8; }
 .bottom-nav .nav-icon { font-size: 1.25rem; line-height: 1; }
+
+/* FIX MOBILE : sur très petits écrans, on resserre la barre
+   et on réduit les libellés pour que rien ne déborde. */
+@media (max-width: 400px) {
+  .bottom-nav { padding: 6px 8px; gap: 2px; }
+  .bottom-nav button { padding: 8px 10px; }
+  .bottom-nav .nav-label { font-size: .68rem; }
+  .bottom-nav .nav-icon { font-size: 1.1rem; }
+}
 
 /* Espace sous le contenu pour ne pas être caché par la barre */
 #app .container { padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
