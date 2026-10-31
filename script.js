@@ -167,9 +167,19 @@ EMOJIS.forEach(function (e) {
   var b = document.createElement("button");
   b.type = "button";
   b.textContent = e;
+  // Si un emoji est déjà enregistré (retour sur l'onboarding), on le marque
+  if (me.emoji === e) b.classList.add("selected");
   b.setAttribute("aria-label", "Choisir l'emoji " + e);
+  b.setAttribute("aria-pressed", me.emoji === e ? "true" : "false");
   b.onclick = function () {
     me.emoji = e; saveMe();
+    // VISUEL : on marque clairement le bouton choisi (bordure bleue)
+    onboardEmojiPicker.querySelectorAll(".selected").forEach(function (x) {
+      x.classList.remove("selected");
+      x.setAttribute("aria-pressed", "false");
+    });
+    b.classList.add("selected");
+    b.setAttribute("aria-pressed", "true");
     document.getElementById("customEmoji").value = "";         // vide le champ libre
     document.getElementById("errStep1").style.display = "none"; // cache l'erreur
   };
@@ -183,6 +193,11 @@ document.getElementById("customEmoji").addEventListener("input", function (ev) {
   ev.target.value = clean;
   if (clean) {
     me.emoji = clean; saveMe();
+    // VISUEL : la saisie libre désélectionne les emojis de la liste
+    onboardEmojiPicker.querySelectorAll(".selected").forEach(function (x) {
+      x.classList.remove("selected");
+      x.setAttribute("aria-pressed", "false");
+    });
     document.getElementById("errStep1").style.display = "none";
   }
 });
@@ -266,7 +281,7 @@ function finishOnboarding(){
   onboardDone = true;
   localStorage.setItem("emojitalk_onboarded", "1");
   setProgress(3);
-  showToast("🎉 Bienvenue " + me.pseudo + " !", "success");
+  showToast("🎉 Bienvenue !", "success");
   showApp();
 }
 
@@ -324,7 +339,7 @@ function startEdit(id){
   document.getElementById("postText").value = p.text;
   updateCounter();
   document.getElementById("postText").focus();
-  showToast("✏️ Modifie le texte puis clique sur « Mettre à jour ».");
+  showToast("✏️ Modifie le texte puis clique sur « Publier ».");
 }
 
 /** Annule le mode édition (utilisé par le bouton sous la zone de texte) */
@@ -336,7 +351,7 @@ function cancelEdit(){
   renderFeed();
 }
 
-/** Affiche la barre "modification en cours / réponse en cours" au-dessus de la zone de texte */
+/** Affiche la barre "modification en cours" au-dessus de la zone de texte */
 function renderEditBar(){
   var bar = document.getElementById("editBar");
   if (!bar) return;
@@ -677,7 +692,7 @@ function toggleLike(id){
    à la vue où l'utilisateur était.
    ============================================================ */
 
-/** Ouvre un post en vue détail (et prépare le mode "réponse" si besoin) */
+/** Ouvre un post en vue détail */
 function openPost(id){ location.hash = "#post/" + id; showDetail(); }
 
 /** Affiche le feed et efface le hash */
@@ -722,7 +737,7 @@ function renderDetail(){
 
   // Zone de réponse : pré-remplie avec "@Pseudo " pour répondre à l'auteur
   h += '<div class="card"><h2>↩️ Répondre</h2>'
-     + '<textarea id="replyText" rows="2" maxlength="' + MAX_LEN + '" placeholder="Ta réponse à ' + esc(p.authorPseudo || "Anonyme") + '... (@Pseudo pour le mentionner)" aria-label="Réponse au post"></textarea>'
+     + '<textarea id="replyText" rows="2" maxlength="' + MAX_LEN + '" placeholder="Ta réponse à ' + esc(p.authorPseudo || "Anonyme") + '..." aria-label="Réponse au post"></textarea>'
      + '<button onclick="submitReply(' + id + ')">Répondre</button></div>';
 
   container.innerHTML = h;
