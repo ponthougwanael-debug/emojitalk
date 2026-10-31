@@ -14,6 +14,9 @@ header h1 span { color:#38bdf8; }
 .card { background:#1e293b; border-radius:14px; padding:20px; margin-bottom:20px; border:1px solid #334155; }
 h2 { font-size:1.1rem; margin-bottom:12px; color:#38bdf8; }
 
+/* ---------- Accessibilité : titre de vue recevant le focus ---------- */
+h2:focus { outline:none; } /* le focus y est déplacé par programmation au changement de vue */
+
 /* ---------- Formulaires ---------- */
 textarea, input[type=text] { width:100%; background:#0f172a; border:1px solid #334155; color:#e2e8f0; border-radius:8px; padding:10px; font-size:1rem; resize:vertical; }
 button { background:#38bdf8; color:#0f172a; border:none; padding:10px 18px; border-radius:8px; font-weight:700; cursor:pointer; margin-top:10px; transition:transform .1s, background .2s; }
@@ -21,14 +24,15 @@ button:hover { background:#7dd3fc; }
 button:active { transform:scale(.95); }   /* micro-feedback à l'appui */
 
 /* ---------- Sélecteur d'emoji ---------- */
+/* Cibles tactiles agrandies : minimum ~44x44px (recommandation WCAG / mobile) */
 .emoji-picker { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
-.emoji-picker button { margin:0; padding:6px 10px; background:#0f172a; font-size:1.3rem; border:1px solid #334155; transition:transform .15s, border-color .2s; }
-.emoji-picker button:hover { border-color:#38bdf8; transform:scale(1.2) rotate(-5deg); } /* l'emoji "saute" au survol */
+.emoji-picker button { margin:0; padding:10px 12px; min-width:44px; min-height:44px; background:#0f172a; font-size:1.4rem; border:1px solid #334155; transition:transform .15s, border-color .2s; }
+.emoji-picker button:hover { border-color:#38bdf8; transform:scale(1.15) rotate(-5deg); } /* l'emoji "saute" au survol */
 .emoji-picker button.selected { border-color:#38bdf8; background:#0f172a; box-shadow:0 0 0 2px rgba(56,189,248,.4); } /* emoji choisi dans les paramètres */
 
 /* ---------- Centres d'intérêt / personnalité ---------- */
 .interests { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
-.interests label { background:#0f172a; border:1px solid #334155; padding:6px 12px; border-radius:20px; cursor:pointer; font-size:.9rem; transition:all .2s; }
+.interests label { background:#0f172a; border:1px solid #334155; padding:10px 14px; border-radius:20px; cursor:pointer; font-size:.9rem; transition:all .2s; min-height:44px; display:inline-flex; align-items:center; }
 .interests label:hover { border-color:#38bdf8; transform:translateY(-2px); }
 .interests input { display:none; }
 .interests label:has(input:checked) { background:#38bdf8; color:#0f172a; font-weight:700; }
@@ -44,7 +48,7 @@ button:active { transform:scale(.95); }   /* micro-feedback à l'appui */
 .avatar { font-size:1.8rem; }
 .tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
 .tag { background:#0f172a; border:1px solid #334155; color:#38bdf8; padding:3px 10px; border-radius:12px; font-size:.8rem; }
-.post time { color:#64748b; font-size:.8rem; }
+.post time { color:#94a3b8; font-size:.8rem; } /* gris éclairci : contraste WCAG AA */
 
 /* Apparition en douceur des cartes du feed */
 @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
@@ -64,16 +68,16 @@ button:active { transform:scale(.95); }   /* micro-feedback à l'appui */
 }
 
 /* ---------- Actions sur un post ---------- */
-.like { background:none; border:none; color:#e2e8f0; cursor:pointer; margin-top:8px; padding:4px 8px; font-size:.95rem; }
+.like { background:none; border:none; color:#e2e8f0; cursor:pointer; margin-top:8px; padding:8px 10px; font-size:.95rem; }
 .like:hover { color:#f472b6; }
 .like.liked { color:#f472b6; font-weight:700; animation:pop .3s ease; } /* le cœur "rebondit" */
 @keyframes pop { 0%{transform:scale(1);} 50%{transform:scale(1.5);} 100%{transform:scale(1);} }
-.report-btn { background:none; border:none; color:#64748b; cursor:pointer; margin-top:8px; padding:4px 8px; font-size:.85rem; }
+.report-btn { background:none; border:none; color:#94a3b8; cursor:pointer; margin-top:8px; padding:8px 10px; font-size:.85rem; }
 .report-btn:hover { color:#fbbf24; }
 .report-btn.reported { color:#fbbf24; }
-.mp-btn { background:none; border:1px solid #334155; color:#38bdf8; cursor:pointer; margin-top:8px; padding:4px 10px; font-size:.85rem; border-radius:8px; transition:all .2s; }
+.mp-btn { background:none; border:1px solid #334155; color:#38bdf8; cursor:pointer; margin-top:8px; padding:8px 12px; font-size:.85rem; border-radius:8px; transition:all .2s; min-height:44px; }
 .mp-btn:hover { border-color:#38bdf8; background:rgba(56,189,248,.1); }
-.delete-btn { background:#334155; color:#f87171; border:none; padding:6px 12px; border-radius:8px; font-size:.85rem; cursor:pointer; margin-top:8px; }
+.delete-btn { background:#334155; color:#f87171; border:none; padding:8px 12px; border-radius:8px; font-size:.85rem; cursor:pointer; margin-top:8px; min-height:44px; }
 .delete-btn:hover { background:#7f1d1d; color:#fff; }
 
 /* ---------- Vue détail ---------- */
@@ -83,7 +87,7 @@ button:active { transform:scale(.95); }   /* micro-feedback à l'appui */
 
 /* ---------- Recherche dans le feed ---------- */
 .search-input { margin-bottom:14px; }
-.search-input input { padding-left:36px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:10px center; }
+.search-input input { padding-left:36px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:10px center; }
 
 /* ---------- Notifications toast (remplacent les alert) ---------- */
 .toast-container { position:fixed; bottom:90px; right:20px; z-index:100; display:flex; flex-direction:column; gap:8px; }
@@ -95,18 +99,31 @@ button:active { transform:scale(.95); }   /* micro-feedback à l'appui */
 @keyframes slideOut { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(60px); } }
 
 /* ---------- Divers ---------- */
-.empty { color:#64748b; text-align:center; padding:30px 0; }
+.empty { color:#94a3b8; text-align:center; padding:30px 0; }
 .error-msg { color:#f87171; font-size:.85rem; margin-top:8px; display:none; animation:shake .3s ease; } /* tremble pour attirer l'œil */
 @keyframes shake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-4px);} 75%{transform:translateX(4px);} }
-.char-counter { color:#64748b; font-size:.8rem; text-align:right; margin-top:4px; }
+.char-counter { color:#94a3b8; font-size:.8rem; text-align:right; margin-top:4px; }
 .char-counter.limit { color:#f87171; }
 .sort-bar { display:flex; gap:8px; margin-bottom:14px; }
-.sort-bar button { margin:0; padding:6px 14px; font-size:.85rem; }
+.sort-bar button { margin:0; padding:8px 14px; font-size:.85rem; min-height:44px; }
 .sort-bar button.active { background:#7dd3fc; }
-button:focus-visible, textarea:focus-visible, input:focus-visible, .post:focus-visible {
+button:focus-visible, textarea:focus-visible, input:focus-visible, .post:focus-visible, .conv-item:focus-visible {
   outline:2px solid #38bdf8; outline-offset:2px;
 }
 .undo-box { background:#1e293b; border:1px solid #38bdf8; border-radius:10px; padding:10px 16px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; }
+
+/* ============================================================
+   ACCESSIBILITÉ : respect des préférences système
+   Les personnes sensibles au mouvement (paramètre "réduire les
+   animations" de l'OS) n'auront quasiment plus d'animations.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
 
 /* ============================================================
    BARRE DE NAVIGATION (bottom-nav)
@@ -115,7 +132,9 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, .post:focus-v
    ============================================================ */
 .bottom-nav {
   position: fixed;
-  bottom: 14px;
+  /* env(safe-area-inset-bottom) : évite que la barre soit
+     chevauchée par la barre Safari sur iPhone */
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -134,7 +153,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, .post:focus-v
   color: #94a3b8;
   border: none;
   border-radius: 16px;
-  padding: 8px 20px;
+  padding: 10px 20px;
   margin: 0;
   font-size: .8rem;
   font-weight: 600;
@@ -143,6 +162,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, .post:focus-v
   flex-direction: column;
   align-items: center;
   gap: 2px;
+  min-height: 48px;   /* cible tactile confortable */
   transition: background .2s, color .2s, transform .15s;
 }
 .bottom-nav button:hover { background: rgba(56, 189, 248, .12); color: #e2e8f0; }
@@ -150,7 +170,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, .post:focus-v
 .bottom-nav .nav-icon { font-size: 1.25rem; line-height: 1; }
 
 /* Espace sous le contenu pour ne pas être caché par la barre */
-#app .container { padding-bottom: 100px; }
+#app .container { padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
 
 /* ============================================================
    MESSAGES PRIVÉS : liste des conversations + salon de chat
@@ -172,7 +192,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, .post:focus-v
 .conv-item:hover { border-color: #38bdf8; transform: translateY(-2px); }
 .conv-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .conv-last {
-  color: #64748b;
+  color: #94a3b8;
   font-size: .85rem;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -231,9 +251,9 @@ button:focus-visible, textarea:focus-visible, input:focus-visible, .post:focus-v
   color: #e2e8f0;
   border-bottom-left-radius: 4px;
 }
-.bubble.theirs time { color: #64748b; }
+.bubble.theirs time { color: #94a3b8; }
 
 /* --- Zone de saisie du chat --- */
 .chat-input { display: flex; gap: 8px; }
 .chat-input input { flex: 1; }
-.chat-input button { margin: 0; padding: 10px 16px; }
+.chat-input button { margin: 0; padding: 10px 16px; min-height: 44px; min-width: 44px; }
