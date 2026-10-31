@@ -88,6 +88,8 @@
     <main id="feedView">
       <div class="card">
         <h2>✍️ Créer un post</h2>
+        <!-- Barre contextuelle : s'affiche quand on modifie un post -->
+        <div id="editBar"></div>
         <textarea id="postText" rows="3" maxlength="500" placeholder="Quoi de neuf ? (500 caractères max)" aria-label="Contenu du post"></textarea>
         <div class="char-counter" id="charCounter">0 / 500</div>
         <button onclick="createPost()">Publier</button>
@@ -109,7 +111,7 @@
       <div id="feed"></div>
     </main>
 
-    <!-- Vue Détail : un seul post, avec bouton retour -->
+    <!-- Vue Détail : un seul post, ses réponses, avec bouton retour -->
     <main id="detailView" style="display:none;">
       <button class="back-btn" onclick="showFeed()">← Retour au feed</button>
       <div id="postDetail" style="margin-top:16px;"></div>
@@ -132,6 +134,8 @@
           <input type="text" id="msgInput" maxlength="300" placeholder="Ton message... (Entrée pour envoyer)" aria-label="Message privé">
           <button type="button" onclick="sendMessage()" aria-label="Envoyer">➤</button>
         </div>
+        <!-- Compteur de caractères du message privé -->
+        <div class="char-counter" id="msgCounter">0 / 300</div>
       </div>
     </main>
 
@@ -166,6 +170,10 @@
     </main>
 
   </div>
+
+  <!-- Bouton "retour en haut" : apparaît après avoir défilé (géré par script.js) -->
+  <button id="toTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Retour en haut"
+    style="position:fixed;bottom:90px;left:20px;display:none;z-index:60;margin:0;min-width:48px;min-height:48px;">↑</button>
 
   <!-- ============================================================
        BARRE DE NAVIGATION (fixe, en bas, effet verre dépoli)
