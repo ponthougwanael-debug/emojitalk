@@ -16,28 +16,37 @@ h2 { font-size:1.1rem; margin-bottom:12px; color:#38bdf8; }
 
 /* ---------- Formulaires ---------- */
 textarea, input[type=text] { width:100%; background:#0f172a; border:1px solid #334155; color:#e2e8f0; border-radius:8px; padding:10px; font-size:1rem; resize:vertical; }
-button { background:#38bdf8; color:#0f172a; border:none; padding:10px 18px; border-radius:8px; font-weight:700; cursor:pointer; margin-top:10px; }
+button { background:#38bdf8; color:#0f172a; border:none; padding:10px 18px; border-radius:8px; font-weight:700; cursor:pointer; margin-top:10px; transition:transform .1s, background .2s; }
 button:hover { background:#7dd3fc; }
+button:active { transform:scale(.95); }   /* micro-feedback à l'appui */
 
 /* ---------- Sélecteur d'emoji ---------- */
 .emoji-picker { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
-.emoji-picker button { margin:0; padding:6px 10px; background:#0f172a; font-size:1.3rem; border:1px solid #334155; }
-.emoji-picker button:hover { border-color:#38bdf8; }
+.emoji-picker button { margin:0; padding:6px 10px; background:#0f172a; font-size:1.3rem; border:1px solid #334155; transition:transform .15s, border-color .2s; }
+.emoji-picker button:hover { border-color:#38bdf8; transform:scale(1.2) rotate(-5deg); } /* l'emoji "saute" au survol */
 
 /* ---------- Centres d'intérêt / personnalité ---------- */
 .interests { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
-.interests label { background:#0f172a; border:1px solid #334155; padding:6px 12px; border-radius:20px; cursor:pointer; font-size:.9rem; }
+.interests label { background:#0f172a; border:1px solid #334155; padding:6px 12px; border-radius:20px; cursor:pointer; font-size:.9rem; transition:all .2s; }
+.interests label:hover { border-color:#38bdf8; transform:translateY(-2px); }
 .interests input { display:none; }
 .interests label:has(input:checked) { background:#38bdf8; color:#0f172a; font-weight:700; }
 
+/* ---------- Barre de progression de l'onboarding ---------- */
+.progress-bar { height:8px; background:#0f172a; border-radius:6px; overflow:hidden; margin-bottom:18px; }
+.progress-fill { height:100%; width:33%; background:linear-gradient(90deg,#38bdf8,#7dd3fc); border-radius:6px; transition:width .4s ease; }
+
 /* ---------- Posts ---------- */
-.post { background:#1e293b; border:1px solid #334155; border-radius:14px; padding:16px; margin-bottom:14px; cursor:pointer; overflow-x:hidden; }
-.post:hover { border-color:#38bdf8; }
+.post { background:#1e293b; border:1px solid #334155; border-radius:14px; padding:16px; margin-bottom:14px; cursor:pointer; overflow-x:hidden; transition:border-color .2s, transform .2s; animation:fadeUp .3s ease both; }
+.post:hover { border-color:#38bdf8; transform:translateY(-2px); }
 .post-head { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
 .avatar { font-size:1.8rem; }
 .tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
 .tag { background:#0f172a; border:1px solid #334155; color:#38bdf8; padding:3px 10px; border-radius:12px; font-size:.8rem; }
 .post time { color:#64748b; font-size:.8rem; }
+
+/* Apparition en douceur des cartes du feed */
+@keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
 
 /*
  * Coupure des mots très longs (ou des suites de caractères sans espaces).
@@ -56,7 +65,8 @@ button:hover { background:#7dd3fc; }
 /* ---------- Actions sur un post ---------- */
 .like { background:none; border:none; color:#e2e8f0; cursor:pointer; margin-top:8px; padding:4px 8px; font-size:.95rem; }
 .like:hover { color:#f472b6; }
-.like.liked { color:#f472b6; font-weight:700; }
+.like.liked { color:#f472b6; font-weight:700; animation:pop .3s ease; } /* le cœur "rebondit" */
+@keyframes pop { 0%{transform:scale(1);} 50%{transform:scale(1.5);} 100%{transform:scale(1);} }
 .report-btn { background:none; border:none; color:#64748b; cursor:pointer; margin-top:8px; padding:4px 8px; font-size:.85rem; }
 .report-btn:hover { color:#fbbf24; }
 .report-btn.reported { color:#fbbf24; }
@@ -68,9 +78,23 @@ button:hover { background:#7dd3fc; }
 .back-btn:hover { background:#475569; }
 .detail-text { font-size:1.1rem; line-height:1.6; margin-top:10px; }
 
+/* ---------- Recherche dans le feed ---------- */
+.search-input { margin-bottom:14px; }
+.search-input input { padding-left:36px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:10px center; }
+
+/* ---------- Notifications toast (remplacent les alert) ---------- */
+.toast-container { position:fixed; bottom:20px; right:20px; z-index:100; display:flex; flex-direction:column; gap:8px; }
+.toast { background:#1e293b; border:1px solid #38bdf8; color:#e2e8f0; padding:12px 18px; border-radius:10px; box-shadow:0 4px 14px rgba(0,0,0,.5); animation:slideIn .3s ease; font-size:.95rem; max-width:320px; }
+.toast.success { border-color:#4ade80; }
+.toast.error { border-color:#f87171; }
+.toast.hide { animation:slideOut .3s ease forwards; }
+@keyframes slideIn { from { opacity:0; transform:translateX(60px); } to { opacity:1; transform:translateX(0); } }
+@keyframes slideOut { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(60px); } }
+
 /* ---------- Divers ---------- */
 .empty { color:#64748b; text-align:center; padding:30px 0; }
-.error-msg { color:#f87171; font-size:.85rem; margin-top:8px; display:none; }
+.error-msg { color:#f87171; font-size:.85rem; margin-top:8px; display:none; animation:shake .3s ease; } /* tremble pour attirer l'œil */
+@keyframes shake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-4px);} 75%{transform:translateX(4px);} }
 .char-counter { color:#64748b; font-size:.8rem; text-align:right; margin-top:4px; }
 .char-counter.limit { color:#f87171; }
 .sort-bar { display:flex; gap:8px; margin-bottom:14px; }
