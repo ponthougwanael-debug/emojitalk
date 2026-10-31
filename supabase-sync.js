@@ -178,6 +178,19 @@ document.addEventListener("emojitalk:post-reports", function (ev) {
     });
 });
 
+/* --- 4quinquies. SUPPRESSION DE COMPTE ---
+   account.js émet "emojitalk:account-deleted" : on supprime du cloud
+   TOUTES les lignes de cet auteur (posts + réponses), après avoir
+   annulé tout push groupé en attente. */
+document.addEventListener("emojitalk:account-deleted", function (ev) {
+  if (!cloudReady || !ev.detail || !ev.detail.authorId) return;
+  clearTimeout(pushTimer); // aucun push en attente ne doit ré-uploader ses posts
+  sbClient.from("posts").delete().eq("author_id", ev.detail.authorId)
+    .then(function (res) {
+      if (res.error) console.warn("[EmojiTalk] Suppression compte cloud échouée :", res.error.message);
+    });
+});
+
 /* --- 5. TIRER : toutes les 5 s, on récupère les posts des autres --- */
 
 var pulling = false;
