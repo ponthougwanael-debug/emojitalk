@@ -31,12 +31,17 @@ function readPseudoFromCard(card){
 }
 
 /**
- * Retrouve l'auteurId d'une carte : par le texte du post d'abord
- * (fiable), puis par le pseudo en secours.
+ * Retrouve l'auteurId d'une carte. Fiable : script.js ajoute
+ * désormais data-author-id sur chaque carte de post / conversation.
+ * (Le fallback par texte/pseudo reste pour les vieux rendus.)
  * @param {HTMLElement} card
  * @returns {string|null}
  */
 function findAuthorId(card){
+  // 1) Attribut explicite (ajouté par script.js) — le plus fiable
+  var attr = card.getAttribute("data-author-id");
+  if (attr) return attr;
+  // 2) Fallback : comparaison du texte du post
   var pEl = card.querySelector("p");
   if (pEl) {
     var txt = pEl.textContent;
@@ -44,6 +49,7 @@ function findAuthorId(card){
       if (posts[i].text === txt) return posts[i].authorId;
     }
   }
+  // 3) Fallback : pseudo
   var pseudo = card.getAttribute("data-author-pseudo") || readPseudoFromCard(card);
   if (pseudo) {
     for (var j = 0; j < posts.length; j++) {
@@ -181,10 +187,12 @@ function enhanceIdentities(){
     var avatar = item.querySelector(".avatar");
     if (strong && avatar) {
       var peerPseudo = strong.textContent.trim();
-      var peerId = null;
-      Object.keys(convs).forEach(function (id) {
-        if (convs[id].peerPseudo === peerPseudo) peerId = id;
-      });
+      var peerId = item.getAttribute("data-author-id");
+      if (!peerId) {
+        Object.keys(convs).forEach(function (id) {
+          if (convs[id].peerPseudo === peerPseudo) peerId = id;
+        });
+      }
       if (peerId) {
         makeAvatarClickable(avatar, null, peerId);
         strong.style.display = "none"; // l'avatar suffit
