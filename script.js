@@ -472,6 +472,9 @@ function deletePostSafe(id){
   savePosts();
   showFeed();
 
+  // Notifie les autres scripts (supabase-sync.js) de la suppression cloud.
+  document.dispatchEvent(new CustomEvent("emojitalk:post-deleted", { detail: { id: id } }));
+
   var area = document.getElementById("undoArea");
   area.innerHTML = '<div class="undo-box" role="status"><span>🗑️ Post supprimé.</span><button type="button" onclick="undoRestore()">↩️ Annuler</button></div>';
   showToast("🗑️ Post supprimé (annulable 10 s).");
@@ -510,9 +513,12 @@ function reportPost(id){
   p.reports = (p.reports || 0) + 1;
 
   if (p.reports >= 3) {
+    // On pousse AVANT de retirer, pour que le retrait soit visible partout.
+    document.dispatchEvent(new CustomEvent("emojitalk:post-reports", { detail: { post: p } }));
     posts = posts.filter(function (x) { return x.id !== id; });
     showToast("🚩 Post signalé par plusieurs personnes et retiré du feed.", "success");
   } else {
+    document.dispatchEvent(new CustomEvent("emojitalk:post-reports", { detail: { post: p } }));
     showToast("🚩 Merci, ton signalement a été pris en compte.", "success");
   }
   savePosts();
@@ -646,6 +652,7 @@ function renderFeed(){
     card.tabIndex = 0;                       // carte accessible au clavier
     card.setAttribute("role", "button");
     card.setAttribute("aria-label", "Ouvrir le post");
+    card.setAttribute("data-author-id", p.authorId); // fiche profil fiable
     card.innerHTML = postCardHTML(p, false);
 
     // Un clic sur like / signaler / MP / supprimer ne doit PAS ouvrir le post
@@ -731,7 +738,7 @@ function renderDetail(){
   h += '<h2 style="margin:18px 0 10px;">💬 ' + replies.length + ' réponse' + (replies.length > 1 ? "s" : "") + '</h2>';
   if (replies.length) {
     h += '<div id="repliesList">';
-    replies.forEach(function (r) { h += '<div class="post">' + postCardHTML(r, false) + '</div>'; });
+    replies.forEach(function (r) { h += '<div class="post" data-author-id="' + esc(r.authorId) + '">' + postCardHTML(r, false) + '</div>'; });
     h += '</div>';
   }
 
@@ -782,10 +789,25 @@ function submitReply(parentId){
  * @param {string} view - "feed" | "messages" | "settings"
  */
 function navTo(view){
-  // Un détail de post ouvert ne garde son sens que dans le feed
-  if (view !== "feed" || location.hash.indexOf("#post/") !== 0) {
-    if (location.hash !== "") { location.hash = ""; return; } // hashchange relance navTo("feed")
+  // Cas 1 : on est sur le détail d'un post et on demande le feed.
+  // L'effacement du hash déclenche hashchange, qui rappellera navTo("feed").
+  if (view === "feed" && location.hash.indexOf("#post/") === 0) {
+    location.hash = "";
+    return;
   }
+  // Cas 2 : on est sur le détail d'un post et on demande une AUTRE vue
+  // (messages / paramètres). Même mécanique, mais on mémorise la vue
+  // cible pour que hashchange ne nous ramène pas au feed.
+  if (view !== "feed" && location.hash.indexOf("#post/") === 0) {
+    window._pendingView = view;
+    location.hash = "";
+    return;
+  }
+  // Cas 3 : un hash non-post traîne → on le nettoie silencieusement.
+  if (location.hash !== "" && location.hash.indexOf("#post/") !== 0) {
+    location.hash = "";
+  }
+  window._pendingView = null;
 
   // Mémorise l'onglet actif (restauré au rechargement de la page)
   localStorage.setItem(VIEW_KEY, view);
@@ -809,8 +831,8 @@ function navTo(view){
 
 // Réagit aux boutons précédent/suivant du navigateur
 window.addEventListener("hashchange", function () {
-  if (location.hash.indexOf("#post/") === 0) showDetail();
-  else navTo("feed");
+  if (location.hash.indexOf("#post/") === 0) { window._pendingView = null; showDetail(); }
+  else navTo(window._pendingView || "feed");
 });
 
 /* ============================================================
@@ -866,6 +888,7 @@ function renderConvs(){
     item.className = "conv-item";
     item.tabIndex = 0;
     item.setAttribute("role", "button");
+    item.setAttribute("data-author-id", id); // fiche profil fiable
     item.innerHTML =
       '<span class="avatar">' + esc(c.peerEmoji) + '</span>' +
       '<div class="conv-info"><strong>' + esc(c.peerPseudo) + '</strong>' +
