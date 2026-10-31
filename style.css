@@ -31,15 +31,27 @@ button:hover { background:#7dd3fc; }
 .interests label:has(input:checked) { background:#38bdf8; color:#0f172a; font-weight:700; }
 
 /* ---------- Posts ---------- */
-.post { background:#1e293b; border:1px solid #334155; border-radius:14px; padding:16px; margin-bottom:14px; cursor:pointer; }
+.post { background:#1e293b; border:1px solid #334155; border-radius:14px; padding:16px; margin-bottom:14px; cursor:pointer; overflow-x:hidden; }
 .post:hover { border-color:#38bdf8; }
-/* Coupe les mots très longs (ou les suites sans espaces) pour éviter tout débordement horizontal */
-.post p { overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; overflow-x: hidden; }
 .post-head { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
 .avatar { font-size:1.8rem; }
 .tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
 .tag { background:#0f172a; border:1px solid #334155; color:#38bdf8; padding:3px 10px; border-radius:12px; font-size:.8rem; }
 .post time { color:#64748b; font-size:.8rem; }
+
+/*
+ * Coupure des mots très longs (ou des suites de caractères sans espaces).
+ * Appliqué à TOUT paragraphe d'une bulle (.post dans le feed ET .card dans
+ * la vue détail) pour que le texte passe à la ligne au lieu de déborder
+ * vers la droite.
+ */
+.post p, .card p, .detail-text {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-x: hidden;
+  white-space: pre-wrap;   /* conserve les retours à la ligne saisis */
+}
 
 /* ---------- Actions sur un post ---------- */
 .like { background:none; border:none; color:#e2e8f0; cursor:pointer; margin-top:8px; padding:4px 8px; font-size:.95rem; }
@@ -67,4 +79,4 @@ button:hover { background:#7dd3fc; }
 button:focus-visible, textarea:focus-visible, input:focus-visible, .post:focus-visible {
   outline:2px solid #38bdf8; outline-offset:2px;
 }
-.undo-box { background:#1e293b; border:1px solid #38bdf8; border-radius:10px; padding:10px 16px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; }
+.undo-box { background:#1e293b; border:1px solid #38bdf8; border-radius:10px; padding:10px 16px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; }
