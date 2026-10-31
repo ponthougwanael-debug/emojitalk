@@ -25,6 +25,24 @@ try {
   console.warn("[EmojiTalk] Impossible d'initialiser Supabase :", e);
 }
 
+/* --- 2bis. PIERRES TOMBALES : IDs des posts supprimés ---
+   Un post supprimé ne doit JAMAIS revenir, même si un autre
+   visiteur (ou ce navigateur via localStorage) l'a encore dans
+   sa copie locale et le ré-envoie lors d'un push groupé. */
+var TOMBSTONE_KEY = "emojitalk:deleted-ids";
+var deletedIds = {};
+try {
+  (JSON.parse(localStorage.getItem(TOMBSTONE_KEY) || "[]") || []).forEach(function (id) { deletedIds[id] = true; });
+} catch (e) { deletedIds = {}; }
+
+function markDeleted(id) {
+  deletedIds[id] = true;
+  try {
+    var ids = Object.keys(deletedIds).map(Number).slice(-500); // on garde une trace raisonnable
+    localStorage.setItem(TOMBSTONE_KEY, JSON.stringify(ids));
+  } catch (e) { /* quota / mode privé : pas bloquant */ }
+}
+
 /* --- 3. Conversion ligne Supabase ⇄ objet post local --- */
 
 function rowToPost(r) {
@@ -79,7 +97,10 @@ savePosts = function () {
 };
 
 function pushAllPosts() {
-  var rows = posts.slice(0, 200).map(postToRow);
+  // On n'envoie JAMAIS un post marqué comme supprimé (pierre tombale) :
+  // c'est ce qui faisait "ressusciter" les posts/commentaires supprimés
+  // lorsqu'un navigateur avait encore une copie locale périmée.
+  var rows = posts.filter(function (p) { return !deletedIds[p.id]; }).slice(0, 200).map(postToRow);
   if (!rows.length) return; // rien à pousser (tout a été supprimé localement)
   sbClient.from("posts").upsert(rows, { onConflict: "id" })
     .then(function (res) {
@@ -93,7 +114,11 @@ function pushAllPosts() {
    émet un événement "emojitalk:post-deleted" à chaque suppression. */
 document.addEventListener("emojitalk:post-deleted", function (ev) {
   if (!cloudReady || !ev.detail || typeof ev.detail.id === "undefined") return;
-  sbClient.from("posts").delete().eq("id", ev.detail.id)
+  var id = ev.detail.id;
+  markDeleted(id); // mémorisé AVANT tout : aucun push/pull ne pourra le ramener
+  // On annule tout push groupé en attente qui pourrait contenir ce post.
+  clearTimeout(pushTimer);
+  sbClient.from("posts").delete().eq("id", id)
     .then(function (res) {
       if (res.error) console.warn("[EmojiTalk] Suppression cloud échouée :", res.error.message);
     });
@@ -106,6 +131,7 @@ document.addEventListener("emojitalk:post-deleted", function (ev) {
    "emojitalk:post-reports". */
 document.addEventListener("emojitalk:post-reports", function (ev) {
   if (!cloudReady || !ev.detail || !ev.detail.post) return;
+  if (deletedIds[ev.detail.post.id]) return; // déjà supprimé : ne rien renvoyer
   var row = postToRow(ev.detail.post);
   sbClient.from("posts").upsert(row, { onConflict: "id" })
     .then(function (res) {
@@ -129,12 +155,16 @@ function pullPosts() {
       pulling = false;
       if (res.error) { console.warn("[EmojiTalk] Lecture cloud échouée :", res.error.message); return; }
 
-      var remote = (res.data || []).map(rowToPost);
+      var remote = (res.data || []).map(rowToPost).filter(function (rp) {
+        // Un post supprimé (pierre tombale) n'est jamais réintégré,
+        // même si la ligne traîne encore dans le cloud le temps du delete.
+        return !deletedIds[rp.id];
+      });
 
       // Fusion : pour chaque id, on garde la version la plus "riche"
       // (union des likes et des signalements, texte le plus récent).
       var byId = {};
-      posts.forEach(function (p) { byId[p.id] = p; });
+      posts.forEach(function (p) { if (!deletedIds[p.id]) byId[p.id] = p; });
 
       var changed = false;
       remote.forEach(function (rp) {
