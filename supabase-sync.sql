@@ -1,39 +1,68 @@
 -- ============================================================
--- EmojiTalk — synchronisation entre visiteurs via Supabase
--- À exécuter dans le SQL Editor de Supabase.
--- (Ce script remplace/complete supabase-setup.sql : si tu as déjà
---  exécuté supabase-setup.sql, celui-ci recrée la table "posts"
---  avec la structure exacte utilisée par supabase-sync.js.)
+-- EmojiTalk — supabase-sync.sql
+-- Script COMPLET à coller dans le SQL Editor de Supabase
+-- (Dashboard > SQL Editor > New query > coller > Run).
+-- Il peut être ré-exécuté sans risque : il ne recrée pas ce
+-- qui existe déjà.
 -- ============================================================
 
--- 1. Table des posts partagés
-create table if not exists public.posts (
-  id                  int8 primary key,          -- même id que côté client (Date.now())
-  author_id           text not null,             -- identifiant anonyme du navigateur
-  author_pseudo       text not null,
-  author_emoji        text not null,
-  author_interests    jsonb not null default '[]',
-  author_personality  jsonb not null default '[]',
-  text                text not null,
-  likes               int  not null default 0,
-  liked_by            jsonb not null default '[]',
-  reports             int  not null default 0,
-  reported_by         jsonb not null default '[]',
-  parent_id           int8,                      -- non-null = réponse à un autre post
-  edited              boolean not null default false,
-  created_at          timestamptz not null default now()
+-- ------------------------------------------------------------
+-- 1. Table des posts
+-- ------------------------------------------------------------
+create table if not exists posts (
+  id                bigint primary key,
+  author_id         text not null,
+  author_pseudo     text not null default 'Anonyme',
+  author_emoji      text not null default '😀',
+  author_interests  jsonb not null default '[]'::jsonb,
+  author_personality jsonb not null default '[]'::jsonb,
+  text              text not null,
+  likes             int not null default 0,
+  liked_by          jsonb not null default '[]'::jsonb,
+  reports           int not null default 0,
+  reported_by       jsonb not null default '[]'::jsonb,
+  parent_id         bigint,
+  edited            boolean not null default false,
+  created_at        timestamptz not null default now()
 );
 
--- 2. Accès public (projet 100% anonyme, sans compte)
-alter table public.posts enable row level security;
+-- ------------------------------------------------------------
+-- 2. NOUVEAU : table des suppressions partagées ("pierres tombales")
+-- Tout appareil qui supprime un post y enregistre l'ID : les
+-- autres appareils consultent cette liste et purgent le post,
+-- même si le DELETE de la ligne a échoué ou traîne.
+-- ------------------------------------------------------------
+create table if not exists deleted_posts (
+  post_id    bigint primary key,
+  deleted_at timestamptz not null default now()
+);
 
-drop policy if exists "public read posts"   on public.posts;
-drop policy if exists "public write posts"  on public.posts;
-drop policy if exists "public update posts" on public.posts;
+-- ------------------------------------------------------------
+-- 3. Activer l'accès public (site sans compte)
+-- ------------------------------------------------------------
+alter table posts         enable row level security;
+alter table deleted_posts enable row level security;
 
-create policy "public read posts"   on public.posts for select using (true);
-create policy "public write posts"  on public.posts for insert with check (true);
-create policy "public update posts" on public.posts for update using (true);
+-- Posts : lecture, création, modification…
+drop policy if exists "public read posts"    on posts;
+drop policy if exists "public insert posts"  on posts;
+drop policy if exists "public update posts"  on posts;
+-- …ET SUPPRESSION (c'était le chaînon manquant : sans cette
+-- politique, les posts supprimés restaient dans le cloud et
+-- réapparaissaient sur les autres appareils).
+drop policy if exists "public delete posts"  on posts;
 
--- 3. (Optionnel mais conseillé) Index pour de bonnes performances
-create index if not exists posts_created_at_idx on public.posts (created_at desc);
+create policy "public read posts"   on posts for select using (true);
+create policy "public insert posts" on posts for insert with check (true);
+create policy "public update posts" on posts for update using (true);
+create policy "public delete posts" on posts for delete using (true);
+
+-- Pierres tombales : lecture (pour filtrer), écriture (pour
+-- enregistrer une suppression), suppression (nettoyage).
+drop policy if exists "public read deleted"   on deleted_posts;
+drop policy if exists "public insert deleted" on deleted_posts;
+drop policy if exists "public delete deleted" on deleted_posts;
+
+create policy "public read deleted"   on deleted_posts for select using (true);
+create policy "public insert deleted" on deleted_posts for insert with check (true);
+create policy "public delete deleted" on deleted_posts for delete using (true);
