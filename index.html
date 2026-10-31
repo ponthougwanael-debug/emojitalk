@@ -4,56 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EmojiTalk — Discussions sans compte</title>
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',sans-serif; }
-  body { background:#0f172a; color:#e2e8f0; min-height:100vh; }
-  header { background:#1e293b; padding:18px 24px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 10px rgba(0,0,0,.4); position:sticky; top:0; z-index:10; }
-  header h1 { font-size:1.4rem; }
-  header h1 span { color:#38bdf8; }
-  .container { max-width:900px; margin:24px auto; padding:0 16px; display:grid; grid-template-columns:1fr 300px; gap:24px; }
-  @media(max-width:760px){ .container{ grid-template-columns:1fr; } }
-  .card { background:#1e293b; border-radius:14px; padding:20px; margin-bottom:20px; border:1px solid #334155; }
-  h2 { font-size:1.1rem; margin-bottom:12px; color:#38bdf8; }
-  textarea, input[type=text] { width:100%; background:#0f172a; border:1px solid #334155; color:#e2e8f0; border-radius:8px; padding:10px; font-size:1rem; resize:vertical; }
-  button { background:#38bdf8; color:#0f172a; border:none; padding:10px 18px; border-radius:8px; font-weight:700; cursor:pointer; margin-top:10px; }
-  button:hover { background:#7dd3fc; }
-  .emoji-picker { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
-  .emoji-picker button { margin:0; padding:6px 10px; background:#0f172a; font-size:1.3rem; border:1px solid #334155; }
-  .emoji-picker button:hover { border-color:#38bdf8; }
-  .interests { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
-  .interests label { background:#0f172a; border:1px solid #334155; padding:6px 12px; border-radius:20px; cursor:pointer; font-size:.9rem; }
-  .interests input { display:none; }
-  .interests label:has(input:checked) { background:#38bdf8; color:#0f172a; font-weight:700; }
-  .post { background:#1e293b; border:1px solid #334155; border-radius:14px; padding:16px; margin-bottom:14px; cursor:pointer; }
-  .post:hover { border-color:#38bdf8; }
-  .post-head { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
-  .avatar { font-size:1.8rem; }
-  .tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
-  .tag { background:#0f172a; border:1px solid #334155; color:#38bdf8; padding:3px 10px; border-radius:12px; font-size:.8rem; }
-  .post time { color:#64748b; font-size:.8rem; }
-  .like { background:none; border:none; color:#e2e8f0; cursor:pointer; margin-top:8px; padding:4px 8px; font-size:.95rem; }
-  .like:hover { color:#f472b6; }
-  .empty { color:#64748b; text-align:center; padding:30px 0; }
-  .error-msg { color:#f87171; font-size:.85rem; margin-top:8px; display:none; }
-  .delete-btn { background:#334155; color:#f87171; border:none; padding:6px 12px; border-radius:8px; font-size:.85rem; cursor:pointer; margin-top:8px; }
-  .delete-btn:hover { background:#7f1d1d; color:#fff; }
-  .back-btn { background:#334155; color:#e2e8f0; }
-  .back-btn:hover { background:#475569; }
-  .detail-text { font-size:1.1rem; line-height:1.6; margin-top:10px; }
-  .like.liked { color:#f472b6; font-weight:700; }
-  .report-btn { background:none; border:none; color:#64748b; cursor:pointer; margin-top:8px; padding:4px 8px; font-size:.85rem; }
-  .report-btn:hover { color:#fbbf24; }
-  .report-btn.reported { color:#fbbf24; }
-  .char-counter { color:#64748b; font-size:.8rem; text-align:right; margin-top:4px; }
-  .char-counter.limit { color:#f87171; }
-  .sort-bar { display:flex; gap:8px; margin-bottom:14px; }
-  .sort-bar button { margin:0; padding:6px 14px; font-size:.85rem; }
-  .sort-bar button.active { background:#7dd3fc; }
-  button:focus-visible, textarea:focus-visible, input:focus-visible, .post:focus-visible {
-    outline:2px solid #38bdf8; outline-offset:2px;
-  }
-  .undo-box { background:#1e293b; border:1px solid #38bdf8; border-radius:10px; padding:10px 16px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; }
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
