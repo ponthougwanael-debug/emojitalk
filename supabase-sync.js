@@ -43,6 +43,27 @@ function markDeleted(id) {
   } catch (e) { /* quota / mode privé : pas bloquant */ }
 }
 
+/* --- 2ter. PIERRES TOMBALES DE LIKES ---
+   Quand quelqu'un retire son like, il ne doit jamais revenir :
+   un navigateur ayant une copie périmée de likedBy pourrait le
+   ré-uploader lors d'un push groupé. On mémorise donc chaque
+   "post:utilisateur" retiré, durablement. */
+var LIKE_TOMBSTONE_KEY = "emojitalk:deleted-likes";
+var deletedLikes = {}; // clé "postId:userId" → true
+try {
+  (JSON.parse(localStorage.getItem(LIKE_TOMBSTONE_KEY) || "[]") || []).forEach(function (k) { deletedLikes[k] = true; });
+} catch (e) { deletedLikes = {}; }
+
+function likeKey(postId, userId) { return postId + ":" + userId; }
+
+function markLikeDeleted(postId, userId) {
+  deletedLikes[likeKey(postId, userId)] = true;
+  try {
+    var keys = Object.keys(deletedLikes).slice(-2000);
+    localStorage.setItem(LIKE_TOMBSTONE_KEY, JSON.stringify(keys));
+  } catch (e) { /* quota / mode privé : pas bloquant */ }
+}
+
 /* --- 3. Conversion ligne Supabase ⇄ objet post local --- */
 
 function rowToPost(r) {
@@ -73,7 +94,7 @@ function postToRow(p) {
     author_interests: p.authorInterests || [],
     author_personality: p.authorPersonality || [],
     text: p.text,
-    likes: p.likes || 0,
+    likes: (p.likedBy || []).length, // le compteur est TOUJOURS dérivé de likedBy : jamais désynchronisé
     liked_by: p.likedBy || [],
     reports: p.reports || 0,
     reported_by: p.reportedBy || [],
@@ -124,7 +145,25 @@ document.addEventListener("emojitalk:post-deleted", function (ev) {
     });
 });
 
-/* --- 4ter. SIGNALEMENTS poussés immédiatement ---
+/* --- 4ter. UN-LIKE retiré réellement dans le cloud ---
+   script.js émet "emojitalk:post-unliked" quand quelqu'un retire
+   son like : on mémorise la pierre tombale et on pousse l'état
+   corrigé immédiatement, pour qu'aucun autre navigateur ne le
+   ré-ajoute. */
+document.addEventListener("emojitalk:post-unliked", function (ev) {
+  if (!cloudReady || !ev.detail || !ev.detail.post || !ev.detail.userId) return;
+  var p = ev.detail.post;
+  if (deletedIds[p.id]) return; // post déjà supprimé : ne rien renvoyer
+  markLikeDeleted(p.id, ev.detail.userId);
+  clearTimeout(pushTimer);
+  var row = postToRow(p);
+  sbClient.from("posts").upsert(row, { onConflict: "id" })
+    .then(function (res) {
+      if (res.error) console.warn("[EmojiTalk] Retrait de like cloud échoué :", res.error.message);
+    });
+});
+
+/* --- 4quater. SIGNALEMENTS poussés immédiatement ---
    Quand un post atteint 3 signalements, script.js le retire
    localement AVANT que l'upsert ne parte : on pousse donc le
    compteur AVANT la suppression via l'événement
@@ -170,17 +209,25 @@ function pullPosts() {
       remote.forEach(function (rp) {
         var lp = byId[rp.id];
         if (!lp) {
-          byId[rp.id] = rp;           // post inconnu → on l'ajoute
+          // Post inconnu → on l'ajoute, mais on retire d'abord les
+          // likes que CE navigateur a explicitement retirés.
+          rp.likedBy = (rp.likedBy || []).filter(function (u) {
+            return !deletedLikes[likeKey(rp.id, u)];
+          });
+          rp.likes = rp.likedBy.length; // compteur toujours dérivé de likedBy
+          byId[rp.id] = rp;
           changed = true;
         } else {
-          // Union des likes et signalements (jamais de perte)
+          // Union des likes et signalements (jamais de perte),
+          // SAUF les likes explicitement retirés (pierre tombale).
           rp.likedBy.forEach(function (u) {
+            if (deletedLikes[likeKey(rp.id, u)]) return; // retiré ici → ne jamais réintégrer
             if (lp.likedBy.indexOf(u) === -1) { lp.likedBy.push(u); changed = true; }
           });
           rp.reportedBy.forEach(function (u) {
             if (lp.reportedBy.indexOf(u) === -1) { lp.reportedBy.push(u); changed = true; }
           });
-          if (rp.likes > lp.likes)   { lp.likes = rp.likes; changed = true; }
+          lp.likes = lp.likedBy.length; // recalcul : le compteur ne peut plus mentir
           if (rp.reports > lp.reports) { lp.reports = rp.reports; changed = true; }
           if (rp.edited && !lp.edited) { lp.edited = true; changed = true; }
           if (rp.text !== lp.text && rp.date >= lp.date) { lp.text = rp.text; changed = true; }
@@ -192,16 +239,15 @@ function pullPosts() {
       Object.keys(byId).forEach(function (k) {
         if (byId[k].reports >= 3) { delete byId[k]; changed = true; }
       });
-      if (remote.length) {
-        var remoteIds = {};
-        remote.forEach(function (rp) { remoteIds[rp.id] = true; });
-        posts.forEach(function (p) {
-          // On ne retire un post local absent du cloud que s'il vient
-          // du cloud lui-même (sinon on effacerait un post en cours
-          // d'envoi chez un autre visiteur).
-          if (!remoteIds[p.id] && p._fromCloud) { delete byId[p.id]; changed = true; }
-        });
-      }
+      // On retire tout post local venu du cloud mais absent du cloud
+      // maintenant — MÊME SI la liste cloud est vide. L'ancienne
+      // condition "if (remote.length)" laissait justement ressusciter
+      // le dernier post supprimé quand le feed devenait vide.
+      var remoteIds = {};
+      remote.forEach(function (rp) { remoteIds[rp.id] = true; });
+      Object.keys(byId).forEach(function (k) {
+        if (!remoteIds[k] && byId[k]._fromCloud) { delete byId[k]; changed = true; }
+      });
       remote.forEach(function (rp) { if (byId[rp.id]) byId[rp.id]._fromCloud = true; });
 
       if (!changed) return;
