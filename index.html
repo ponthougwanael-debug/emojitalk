@@ -73,9 +73,9 @@
 </div>
 
 <!-- ============================================================
-     APPLICATION : deux "vues" — le feed et la page de détail d'un post.
-     La navigation se fait via le hash d'URL (#post/<id>) : le bouton
-     retour du navigateur fonctionne donc naturellement.
+     APPLICATION : trois "vues" — feed, messages privés, paramètres.
+     La navigation se fait via la barre du bas (bottom-nav) et,
+     pour les posts, via le hash d'URL (#post/<id>).
      ============================================================ -->
 <div id="app" style="display:none;">
   <div class="container" style="grid-template-columns:1fr;">
@@ -111,7 +111,73 @@
       <div id="postDetail" style="margin-top:16px;"></div>
     </main>
 
+    <!-- ============================================================
+         Vue MESSAGES PRIVÉS : liste des conversations, puis salon
+         de discussion avec un auteur de post.
+         ============================================================ -->
+    <main id="messagesView" style="display:none;">
+      <h2>💬 Messages privés</h2>
+      <div id="convList"></div>
+
+      <!-- Salon de discussion (caché tant qu'aucune conversation ouverte) -->
+      <div id="chatArea" style="display:none;">
+        <button class="back-btn" onclick="closeChat()">← Conversations</button>
+        <div class="chat-head" id="chatHead"></div>
+        <div class="chat-messages" id="chatMessages" aria-live="polite"></div>
+        <div class="chat-input">
+          <input type="text" id="msgInput" maxlength="300" placeholder="Ton message... (Entrée pour envoyer)" aria-label="Message privé">
+          <button type="button" onclick="sendMessage()" aria-label="Envoyer">➤</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- ============================================================
+         Vue PARAMÈTRES : modifier son emoji, ses intérêts, sa
+         personnalité, voir son pseudo, ou repartir de zéro.
+         ============================================================ -->
+    <main id="settingsView" style="display:none;">
+      <div class="card">
+        <h2>⚙️ Paramètres</h2>
+        <p style="color:#64748b; font-size:.9rem;">Ton pseudo anonyme : <strong id="settingsPseudo" style="color:#38bdf8;"></strong></p>
+
+        <h2 style="margin-top:20px;">😀 Ton emoji</h2>
+        <div class="emoji-picker" id="settingsEmojiPicker" role="group" aria-label="Sélection d'emoji"></div>
+        <input type="text" id="settingsCustomEmoji" maxlength="4" placeholder="Ou tape ton propre emoji / caractère" style="margin-top:12px;" aria-label="Emoji personnalisé">
+
+        <h2 style="margin-top:20px;">🎯 Tes centres d'intérêt</h2>
+        <div class="interests" id="settingsInterestPicker" role="group" aria-label="Centres d'intérêt"></div>
+
+        <h2 style="margin-top:20px;">✨ Ta personnalité</h2>
+        <div class="interests" id="settingsPersonalityPicker" role="group" aria-label="Personnalité"></div>
+
+        <p class="error-msg" id="errSettings" role="alert">⚠️ Garde au moins un centre d'intérêt et une personnalité.</p>
+        <button onclick="saveSettings()">💾 Enregistrer</button>
+      </div>
+
+      <div class="card">
+        <h2>♻️ Recommencer</h2>
+        <p style="color:#64748b; font-size:.9rem;">Efface ton profil et refais l'onboarding. Tes posts seront conservés.</p>
+        <button class="delete-btn" onclick="resetOnboarding()">🔄 Refaire l'onboarding</button>
+      </div>
+    </main>
+
   </div>
+
+  <!-- ============================================================
+       BARRE DE NAVIGATION (fixe, en bas, effet verre dépoli)
+       Trois onglets : Feed / Messages / Paramètres.
+       ============================================================ -->
+  <nav class="bottom-nav" id="bottomNav" role="navigation" aria-label="Navigation principale">
+    <button type="button" data-view="feed" class="active" onclick="navTo('feed')" aria-label="Feed">
+      <span class="nav-icon">📰</span><span class="nav-label">Feed</span>
+    </button>
+    <button type="button" data-view="messages" onclick="navTo('messages')" aria-label="Messages privés">
+      <span class="nav-icon">💬</span><span class="nav-label">Messages</span>
+    </button>
+    <button type="button" data-view="settings" onclick="navTo('settings')" aria-label="Paramètres">
+      <span class="nav-icon">⚙️</span><span class="nav-label">Paramètres</span>
+    </button>
+  </nav>
 </div>
 
 </body>
