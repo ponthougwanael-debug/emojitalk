@@ -11,15 +11,24 @@
   <!-- Le style est séparé dans style.css pour la lisibilité et la mise en cache -->
   <link rel="stylesheet" href="style.css">
   <!--
-    La logique JavaScript est séparée en trois fichiers :
-    - script.js  : le cœur du site (posts, likes, MPs, paramètres...)
-    - profile.js : identité par emoji + fiche profil au clic sur l'avatar
-    - a11y.js    : améliorations d'accessibilité (focus des vues,
-                  aria-current, état vide des conversations)
+    Librairie Supabase : permet le partage du feed entre TOUS les visiteurs.
+    Les identifiants (URL + clé publique) sont dans supabase-sync.js.
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!--
+    La logique JavaScript est séparée en quatre fichiers :
+    - script.js        : le cœur du site (posts, likes, MPs, paramètres...)
+    - supabase-sync.js : synchronisation cloud du feed entre visiteurs
+    - profile.js       : identité par emoji + fiche profil au clic sur l'avatar
+    - a11y.js          : améliorations d'accessibilité (focus des vues,
+                         aria-current, état vide des conversations)
     L'attribut "defer" garantit que les scripts s'exécutent APRÈS le
     chargement du HTML (sinon les getElementById échoueraient).
+    L'ordre compte : script.js d'abord (définit savePosts), puis
+    supabase-sync.js qui le branche.
   -->
   <script src="script.js" defer></script>
+  <script src="supabase-sync.js" defer></script>
   <script src="profile.js" defer></script>
   <script src="a11y.js" defer></script>
 </head>
