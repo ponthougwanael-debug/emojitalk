@@ -1,22 +1,34 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EmojiTalk — Discussions sans compte</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EmojiTalk — Discussions sans compte</title>
+
+  <!-- Favicon : emoji 💬 encodé en SVG inline (aucun fichier supplémentaire nécessaire) -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💬</text></svg>">
+
+  <!-- Le style est séparé dans style.css pour la lisibilité et la mise en cache -->
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
+<!-- ============================================================
+     EN-TÊTE : logo + bouton d'actualisation
+     ============================================================ -->
 <header>
   <h1>💬 Emoji<span>Talk</span></h1>
   <button onclick="location.reload()">🔄 Actualiser</button>
 </header>
 
-<!-- ================= ONBOARDING ================= -->
+<!-- ============================================================
+     ONBOARDING : 3 étapes obligatoires (emoji → intérêts → personnalité)
+     On ne peut pas passer une étape : chaque bouton valide avant de continuer.
+     ============================================================ -->
 <div id="onboarding" style="max-width:700px; margin:24px auto; padding:0 16px;">
   <div class="card">
-    <!-- Étape 1 : Emoji -->
+
+    <!-- Étape 1 : Emoji (liste prédéfinie OU champ libre) -->
     <div id="step1">
       <h2>1️⃣ Choisis ton emoji</h2>
       <p style="color:#64748b; font-size:.9rem;">Choisis un emoji dans la liste ou tape ton propre emoji / caractère.</p>
@@ -26,7 +38,7 @@
       <button onclick="validateStep1()">Continuer →</button>
     </div>
 
-    <!-- Étape 2 : Centres d'intérêt -->
+    <!-- Étape 2 : Centres d'intérêt (au moins 1 requis) -->
     <div id="step2" style="display:none;">
       <h2>2️⃣ Tes centres d'intérêt</h2>
       <p style="color:#64748b; font-size:.9rem;">Sélectionne au moins un centre d'intérêt. Ils seront affichés sur chacun de tes posts.</p>
@@ -35,7 +47,7 @@
       <button onclick="validateStep2()">Continuer →</button>
     </div>
 
-    <!-- Étape 3 : Personnalité -->
+    <!-- Étape 3 : Personnalité (au moins 1 requise) -->
     <div id="step3" style="display:none;">
       <h2>3️⃣ Ta personnalité</h2>
       <p style="color:#64748b; font-size:.9rem;">Sélectionne au moins un trait de personnalité.</p>
@@ -43,14 +55,19 @@
       <p class="error-msg" id="errStep3" role="alert">⚠️ Veuillez sélectionner au moins une personnalité.</p>
       <button onclick="finishOnboarding()">🚀 Entrer dans le feed</button>
     </div>
+
   </div>
 </div>
 
-<!-- ================= APPLICATION (FEED + DÉTAIL) ================= -->
+<!-- ============================================================
+     APPLICATION : deux "vues" — le feed et la page de détail d'un post.
+     La navigation se fait via le hash d'URL (#post/<id>) : le bouton
+     retour du navigateur fonctionne donc naturellement.
+     ============================================================ -->
 <div id="app" style="display:none;">
   <div class="container" style="grid-template-columns:1fr;">
 
-    <!-- Vue Feed -->
+    <!-- Vue Feed : création de post + tri + liste -->
     <main id="feedView">
       <div class="card">
         <h2>✍️ Créer un post</h2>
@@ -58,16 +75,19 @@
         <div class="char-counter" id="charCounter">0 / 500</div>
         <button onclick="createPost()">Publier</button>
       </div>
+
+      <!-- Barre de tri : récents ou populaires -->
       <div class="sort-bar" role="group" aria-label="Trier le feed">
         <button id="sortRecent" class="active" onclick="setSort('recent')">🕒 Récents</button>
         <button id="sortPopular" onclick="setSort('popular')">🔥 Populaires</button>
       </div>
+
       <h2>📰 Feed</h2>
-      <div id="undoArea"></div>
+      <div id="undoArea"></div> <!-- zone du message "post supprimé / annuler" -->
       <div id="feed"></div>
     </main>
 
-    <!-- Vue Détail d'un post -->
+    <!-- Vue Détail : un seul post, avec bouton retour -->
     <main id="detailView" style="display:none;">
       <button class="back-btn" onclick="showFeed()">← Retour au feed</button>
       <div id="postDetail" style="margin-top:16px;"></div>
@@ -79,13 +99,35 @@
 <script>
 "use strict";
 
+/* ============================================================
+   1. CONSTANTES ET CONFIGURATION
+   ============================================================ */
+
+// Emojis proposés dans le sélecteur d'onboarding
 var EMOJIS = ["😀","😎","🦊","🐱","🐼","🚀","🌟","🎧","🎮","🎨","🍕","⚽","🌵","🦉","🐙","🌈"];
+
+// Centres d'intérêt disponibles
 var INTERESTS = ["Technologie","Sport","Musique","Cinéma","Voyage","Cuisine","Jeux vidéo","Lecture","Art","Nature","Mode","Science"];
+
+// Traits de personnalité disponibles
 var PERSONALITIES = ["Extraverti","Introverti","Rigolo","Sérieux","Curieux","Rêveur","Sociable","Calme","Aventurier","Créatif"];
+
+// Longueur maximale d'un post
 var MAX_LEN = 500;
 
-// Filtre de mots interdits (modération basique)
+// Animaux utilisés pour générer les pseudos aléatoires ("Renard-42")
+var PSEUDO_ANIMALS = ["Renard","Panda","Hibou","Tigre","Poulpe","Lynx","Renardeau","Koala","Faucon","Orque"];
+
+// Filtre de mots interdits — modération BASIQUE, facilement contournable
+// (espaces, caractères spéciaux...). Le système de signalement des users
+// reste la vraie protection en attendant une modération côté serveur.
 var BANNED_WORDS = ["connard","enculé","salope","pute","ntm","tg","fdp","batard","bâtard","encule"];
+
+/**
+ * Vérifie si un texte contient un mot interdit.
+ * @param {string} text - le texte du post
+ * @returns {boolean}
+ */
 function containsBanned(text){
   var low = text.toLowerCase();
   for (var i = 0; i < BANNED_WORDS.length; i++) {
@@ -94,46 +136,87 @@ function containsBanned(text){
   return false;
 }
 
-// ---- Échappement XSS (appliqué à TOUT contenu affiché, y compris l'emoji libre) ----
+/* ============================================================
+   2. SÉCURITÉ : ÉCHAPPEMENT XSS
+   Tout contenu affiché (texte des posts, emoji libre, tags) passe
+   par esc() : les caractères HTML dangereux sont neutralisés.
+   ============================================================ */
+
+/**
+ * Échappe les caractères spéciaux HTML pour empêcher l'injection de code.
+ * @param {*} s - valeur à échapper (convertie en chaîne)
+ * @returns {string} chaîne sûre à insérer dans innerHTML
+ */
 function esc(s){
   s = String(s == null ? "" : s);
   return s
-    .replace(/&/g, "&amp;")
+    .replace(/&/g, "&amp;")   // & en premier, sinon on double-échappe les autres
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
+
+/** Comme esc(), mais conserve les retours à la ligne (<br>) */
 function escMultiline(s){ return esc(s).replace(/\n/g, "<br>"); }
 
-// ---- Stockage local (pas de compte) ----
-var ME_KEY = "emojitalk_me";
-var POSTS_KEY = "emojitalk_posts";
+/* ============================================================
+   3. STOCKAGE LOCAL (localStorage)
+   NOTE : chaque visiteur ne voit que SES posts. Pour un vrai feed
+   partagé, il faudra brancher un backend (ex : Supabase).
+   ============================================================ */
 
+var ME_KEY    = "emojitalk_me";     // profil de l'utilisateur courant
+var POSTS_KEY = "emojitalk_posts";  // liste des posts
+
+// Chargement du profil (valeurs par défaut si première visite)
 var me = JSON.parse(localStorage.getItem(ME_KEY) || '{"emoji":"","interests":[],"personality":[]}');
+if (!me.interests) me.interests = [];
+if (!me.personality) me.personality = [];
+
+// Chargement des posts (tableau vide si première visite / donnée corrompue)
 var posts = JSON.parse(localStorage.getItem(POSTS_KEY) || "[]");
 if (!Array.isArray(posts)) posts = [];
 
-// ---- Migration : anciens posts sans likedBy / reports (évite un plantage au rendu) ----
+/**
+ * Migration : complète les anciens posts qui n'ont pas les nouveaux
+ * champs (likedBy, reports...). Évite un plantage au rendu.
+ */
 var migrationNeeded = false;
 posts.forEach(function (p) {
-  if (!Array.isArray(p.likedBy)) { p.likedBy = []; if (p.likes > 0) p.likes = 0; migrationNeeded = true; }
+  if (!Array.isArray(p.likedBy))  { p.likedBy = []; if (p.likes > 0) p.likes = 0; migrationNeeded = true; }
   if (typeof p.reports !== "number") { p.reports = 0; migrationNeeded = true; }
   if (!Array.isArray(p.reportedBy)) { p.reportedBy = []; migrationNeeded = true; }
-  if (!Array.isArray(p.authorInterests)) p.authorInterests = [];
+  if (!Array.isArray(p.authorInterests))   p.authorInterests = [];
   if (!Array.isArray(p.authorPersonality)) p.authorPersonality = [];
 });
+
+/** Sauvegarde le profil dans localStorage */
 function saveMe(){ localStorage.setItem(ME_KEY, JSON.stringify(me)); }
+/** Sauvegarde les posts dans localStorage */
 function savePosts(){ localStorage.setItem(POSTS_KEY, JSON.stringify(posts)); }
 if (migrationNeeded) savePosts();
 
-// Identifiant anonyme persistant
+// Identifiant anonyme persistant : sert à mémoriser les likes/signalements
+// et à identifier le propriétaire d'un post (droit de suppression).
 if (!me.id) { me.id = "anon-" + Math.random().toString(36).slice(2, 9); saveMe(); }
 
-// ================= ONBOARDING =================
+// Pseudo lisible généré une seule fois (ex : "Renard-42").
+// Résout le problème : deux personnes avec le même emoji étaient
+// indistinguables dans le feed.
+if (!me.pseudo) {
+  me.pseudo = PSEUDO_ANIMALS[Math.floor(Math.random() * PSEUDO_ANIMALS.length)]
+            + "-" + Math.floor(10 + Math.random() * 90);
+  saveMe();
+}
+
+/* ============================================================
+   4. ONBOARDING : CONSTRUCTION DES SÉLECTEURS
+   ============================================================ */
+
 var onboardDone = localStorage.getItem("emojitalk_onboarded") === "1";
 
-// Sélecteur d'emoji (onboarding)
+// --- Sélecteur d'emoji : un bouton par emoji de la liste ---
 var onboardEmojiPicker = document.getElementById("onboardEmojiPicker");
 EMOJIS.forEach(function (e) {
   var b = document.createElement("button");
@@ -142,59 +225,71 @@ EMOJIS.forEach(function (e) {
   b.setAttribute("aria-label", "Choisir l'emoji " + e);
   b.onclick = function () {
     me.emoji = e; saveMe();
-    document.getElementById("customEmoji").value = "";
-    document.getElementById("errStep1").style.display = "none";
+    document.getElementById("customEmoji").value = "";       // vide le champ libre
+    document.getElementById("errStep1").style.display = "none"; // cache l'erreur
   };
   onboardEmojiPicker.appendChild(b);
 });
 
-// Champ libre emoji — nettoyé contre le XSS : on retire tout caractère HTML dangereux
+// --- Champ libre emoji : on retire les caractères HTML dangereux
+//     à la saisie (double protection avec esc()) ---
 document.getElementById("customEmoji").addEventListener("input", function (ev) {
   var clean = ev.target.value.replace(/[<>"'`&]/g, "").trim();
   ev.target.value = clean;
-  if (clean) { me.emoji = clean; saveMe(); document.getElementById("errStep1").style.display = "none"; }
+  if (clean) {
+    me.emoji = clean; saveMe();
+    document.getElementById("errStep1").style.display = "none";
+  }
 });
 
-// Sélecteur de centres d'intérêt (onboarding)
-var onboardInterestPicker = document.getElementById("onboardInterestPicker");
-INTERESTS.forEach(function (i) {
+/**
+ * Fabrique une case à cocher stylisée (label + checkbox cachée).
+ * @param {HTMLElement} container - où insérer la case
+ * @param {string} value - texte affiché / valeur
+ * @param {boolean} checked - état initial
+ * @param {Function} onChange - callback au changement
+ */
+function buildCheckbox(container, value, checked, onChange){
   var label = document.createElement("label");
   var cb = document.createElement("input");
   cb.type = "checkbox";
-  cb.value = i;
-  cb.checked = me.interests.indexOf(i) !== -1;
-  cb.onchange = function (ev) {
+  cb.value = value;
+  cb.checked = checked;
+  cb.onchange = onChange;
+  label.appendChild(cb);
+  label.appendChild(document.createTextNode(" " + value));
+  container.appendChild(label);
+}
+
+// --- Sélecteur de centres d'intérêt (coché = déjà choisi) ---
+var onboardInterestPicker = document.getElementById("onboardInterestPicker");
+INTERESTS.forEach(function (i) {
+  buildCheckbox(onboardInterestPicker, i, me.interests.indexOf(i) !== -1, function (ev) {
     if (ev.target.checked) me.interests.push(i);
     else me.interests = me.interests.filter(function (x) { return x !== i; });
     saveMe();
     document.getElementById("errStep2").style.display = "none";
-  };
-  label.appendChild(cb);
-  label.appendChild(document.createTextNode(" " + i));
-  onboardInterestPicker.appendChild(label);
+  });
 });
 
-// Sélecteur de personnalité (onboarding)
+// --- Sélecteur de personnalité ---
 var onboardPersonalityPicker = document.getElementById("onboardPersonalityPicker");
 PERSONALITIES.forEach(function (p) {
-  var label = document.createElement("label");
-  var cb = document.createElement("input");
-  cb.type = "checkbox";
-  cb.value = p;
-  cb.checked = (me.personality || []).indexOf(p) !== -1;
-  cb.onchange = function (ev) {
+  buildCheckbox(onboardPersonalityPicker, p, (me.personality || []).indexOf(p) !== -1, function (ev) {
     me.personality = me.personality || [];
     if (ev.target.checked) me.personality.push(p);
     else me.personality = me.personality.filter(function (x) { return x !== p; });
     saveMe();
     document.getElementById("errStep3").style.display = "none";
-  };
-  label.appendChild(cb);
-  label.appendChild(document.createTextNode(" " + p));
-  onboardPersonalityPicker.appendChild(label);
+  });
 });
 
-// ---- Validation des étapes (impossible de passer) ----
+/* ============================================================
+   5. ONBOARDING : VALIDATION DES ÉTAPES
+   Impossible de continuer sans avoir validé l'étape en cours.
+   ============================================================ */
+
+/** Étape 1 : un emoji est obligatoire */
 function validateStep1(){
   if (!me.emoji || !me.emoji.trim()) {
     document.getElementById("errStep1").style.display = "block";
@@ -202,6 +297,8 @@ function validateStep1(){
   }
   goStep(2);
 }
+
+/** Étape 2 : au moins un centre d'intérêt */
 function validateStep2(){
   if (!me.interests.length) {
     document.getElementById("errStep2").style.display = "block";
@@ -209,6 +306,8 @@ function validateStep2(){
   }
   goStep(3);
 }
+
+/** Étape 3 : au moins une personnalité, puis on entre dans le feed */
 function finishOnboarding(){
   if (!(me.personality || []).length) {
     document.getElementById("errStep3").style.display = "block";
@@ -218,18 +317,26 @@ function finishOnboarding(){
   localStorage.setItem("emojitalk_onboarded", "1");
   showApp();
 }
+
+/** Affiche l'étape n (1, 2 ou 3) et masque les autres */
 function goStep(n){
   document.getElementById("step1").style.display = n === 1 ? "block" : "none";
   document.getElementById("step2").style.display = n === 2 ? "block" : "none";
   document.getElementById("step3").style.display = n === 3 ? "block" : "none";
 }
+
+/** Passe de l'onboarding à l'application */
 function showApp(){
   document.getElementById("onboarding").style.display = "none";
   document.getElementById("app").style.display = "block";
   showFeed();
 }
 
-// ---- Rate limiting : max 1 post / 10 secondes ----
+/* ============================================================
+   6. CRÉATION DE POST
+   ============================================================ */
+
+// Rate limiting : 1 post maximum toutes les 10 secondes
 var RATE_KEY = "emojitalk_lastPost";
 function rateLimited(){
   var last = parseInt(localStorage.getItem(RATE_KEY) || "0", 10);
@@ -238,16 +345,20 @@ function rateLimited(){
   return false;
 }
 
-// ---- Créer un post ----
+/** Publie un post après validation (vide, longueur, filtre, rate limit) */
 function createPost(){
   var text = document.getElementById("postText").value.trim();
   if (!text) { alert("Écris quelque chose ! 🙂"); return; }
   if (text.length > MAX_LEN) { alert("Post trop long (max " + MAX_LEN + " caractères)."); return; }
   if (containsBanned(text)) { alert("🚫 Ton post contient des mots inappropriés. Merci de rester respectueux."); return; }
   if (rateLimited()) return;
+
+  // On fige l'emoji / les tags / le pseudo au moment de la publication :
+  // modifier son profil plus tard ne réécrira pas l'historique.
   posts.unshift({
     id: Date.now(),
     authorId: me.id,
+    authorPseudo: me.pseudo,
     authorEmoji: me.emoji,
     authorInterests: me.interests.slice(),
     authorPersonality: (me.personality || []).slice(),
@@ -260,36 +371,61 @@ function createPost(){
   });
   savePosts();
   localStorage.setItem(RATE_KEY, String(Date.now()));
+
+  // Réinitialise la zone de saisie
   document.getElementById("postText").value = "";
   updateCounter();
   if (location.hash.indexOf("#post/") === 0) showFeed();
   else { renderFeed(); renderDetail(); }
 }
 
-// ---- Compteur de caractères ----
+/** Met à jour le compteur "x / 500" sous la zone de texte */
 function updateCounter(){
   var len = document.getElementById("postText").value.length;
   var c = document.getElementById("charCounter");
   c.textContent = len + " / " + MAX_LEN;
-  c.classList.toggle("limit", len >= MAX_LEN - 50);
+  c.classList.toggle("limit", len >= MAX_LEN - 50); // passe en rouge près de la limite
 }
 document.getElementById("postText").addEventListener("input", updateCounter);
 
-// ---- Supprimer un post (avec annulation 10 s) ----
+/** Formate une date en temps relatif, ex : "il y a 2 min" */
+function relativeDate(timestamp){
+  var diff = Date.now() - timestamp;
+  var min = Math.floor(diff / 60000);
+  if (min < 1)   return "à l'instant";
+  if (min < 60)  return "il y a " + min + " min";
+  var h = Math.floor(min / 60);
+  if (h < 24)    return "il y a " + h + " h";
+  var j = Math.floor(h / 24);
+  if (j < 7)     return "il y a " + j + " j";
+  // Au-delà d'une semaine : date complète
+  return new Date(timestamp).toLocaleDateString("fr-FR");
+}
+
+/* ============================================================
+   7. SUPPRESSION AVEC ANNULATION (10 secondes)
+   ============================================================ */
+
 var undoTimer = null, lastDeleted = null, lastIndex = 0;
+
+/** Supprime un post, mais propose "Annuler" pendant 10 s */
 function deletePostSafe(id){
   var idx = -1;
   for (var i = 0; i < posts.length; i++) { if (posts[i].id === id) { idx = i; break; } }
   if (idx === -1) return;
+
   lastDeleted = posts[idx]; lastIndex = idx;
   posts.splice(idx, 1);
   savePosts();
   showFeed();
+
   var area = document.getElementById("undoArea");
   area.innerHTML = '<div class="undo-box" role="status"><span>🗑️ Post supprimé.</span><button type="button" onclick="undoRestore()">↩️ Annuler</button></div>';
   clearTimeout(undoTimer);
   undoTimer = setTimeout(function () { lastDeleted = null; area.innerHTML = ""; }, 10000);
 }
+
+/** Restaure le post supprimé (appelé par le bouton "Annuler") */
 function undoRestore(){
   clearTimeout(undoTimer);
   if (lastDeleted){
@@ -301,15 +437,23 @@ function undoRestore(){
   renderFeed();
 }
 
-// ---- Signaler un post ----
+/* ============================================================
+   8. SIGNALEMENT
+   1 signalement par personne et par post. À partir de 3
+   signalements, le post est retiré automatiquement.
+   ============================================================ */
+
 function reportPost(id){
   var p = null;
   for (var i = 0; i < posts.length; i++) { if (posts[i].id === id) { p = posts[i]; break; } }
   if (!p) return;
+
   p.reportedBy = p.reportedBy || [];
-  if (p.reportedBy.indexOf(me.id) !== -1) return;
+  if (p.reportedBy.indexOf(me.id) !== -1) return; // a déjà signalé ce post
+
   p.reportedBy.push(me.id);
   p.reports = (p.reports || 0) + 1;
+
   if (p.reports >= 3) {
     posts = posts.filter(function (x) { return x.id !== id; });
     alert("🚩 Post signalé par plusieurs personnes et retiré du feed.");
@@ -320,14 +464,21 @@ function reportPost(id){
   renderFeed(); renderDetail();
 }
 
-// ---- Tri du feed ----
-var sortMode = "recent";
+/* ============================================================
+   9. TRI DU FEED
+   ============================================================ */
+
+var sortMode = "recent"; // "recent" ou "popular"
+
+/** Change le mode de tri et rafraîchit le feed */
 function setSort(mode){
   sortMode = mode;
   document.getElementById("sortRecent").classList.toggle("active", mode === "recent");
   document.getElementById("sortPopular").classList.toggle("active", mode === "popular");
   renderFeed();
 }
+
+/** Retourne une copie triée des posts (sans modifier l'original) */
 function sortedPosts(){
   var arr = posts.slice();
   if (sortMode === "popular") arr.sort(function (a, b) { return (b.likes - a.likes) || (b.date - a.date); });
@@ -335,24 +486,43 @@ function sortedPosts(){
   return arr;
 }
 
-// ---- Rendu d'une carte de post (sans template literals imbriqués) ----
+/* ============================================================
+   10. RENDU : CARTES DE POST, FEED, DÉTAIL
+   ============================================================ */
+
+/**
+ * Génère le HTML d'une carte de post.
+ * @param {Object} p - le post
+ * @param {boolean} isDetail - true pour la vue détail (plus grand)
+ * @returns {string} HTML (tout contenu utilisateur déjà échappé)
+ */
 function postCardHTML(p, isDetail){
-  var liked = p.likedBy.indexOf(me.id) !== -1;
-  var reported = p.reportedBy.indexOf(me.id) !== -1;
+  var liked = p.likedBy.indexOf(me.id) !== -1;    // ai-je déjà liké ?
+  var reported = p.reportedBy.indexOf(me.id) !== -1; // ai-je déjà signalé ?
   var h = "";
+
+  // En-tête : avatar + pseudo + date relative
   h += '<div class="post-head">';
   h += '<span class="avatar" aria-hidden="true"' + (isDetail ? ' style="font-size:3rem;"' : '') + '>' + esc(p.authorEmoji) + '</span>';
-  h += '<div><strong>Anonyme ' + esc(p.authorEmoji) + '</strong><br>';
-  h += '<time>' + new Date(p.date).toLocaleString("fr-FR") + '</time></div>';
+  h += '<div><strong>' + esc(p.authorPseudo || "Anonyme") + ' ' + esc(p.authorEmoji) + '</strong><br>';
+  h += '<time>' + relativeDate(p.date) + '</time></div>';
   h += '</div>';
+
+  // Texte du post (échappé, retours à la ligne conservés)
   h += '<p' + (isDetail ? ' class="detail-text"' : '') + '>' + escMultiline(p.text) + '</p>';
+
+  // Tags : centres d'intérêt + personnalité de l'auteur au moment du post
   h += '<div class="tags">';
   p.authorInterests.forEach(function (i) { h += '<span class="tag">' + esc(i) + '</span>'; });
   p.authorPersonality.forEach(function (x) { h += '<span class="tag">' + esc(x) + '</span>'; });
   h += '</div>';
+
+  // Zone d'actions : la propagation du clic est bloquée plus bas
+  // pour ne pas déclencher l'ouverture du post.
   h += '<div data-actions="1">';
   h += '<button type="button" class="like' + (liked ? " liked" : "") + '" onclick="toggleLike(' + p.id + ')" aria-label="Aimer ce post">' + (liked ? "❤️" : "🤍") + " " + p.likes + (isDetail ? " j'aime" : "") + '</button>';
   h += '<button type="button" class="report-btn' + (reported ? " reported" : "") + '" onclick="reportPost(' + p.id + ')" aria-label="Signaler ce post"' + (reported ? " disabled" : "") + '>🚩 ' + (reported ? "Signalé" : "Signaler") + '</button>';
+  // Bouton supprimer : uniquement pour l'auteur du post
   if (p.authorId === me.id) {
     h += '<button type="button" class="delete-btn" onclick="deletePostSafe(' + p.id + ')">🗑️ ' + (isDetail ? "Supprimer mon post" : "Supprimer") + '</button>';
   }
@@ -360,7 +530,7 @@ function postCardHTML(p, isDetail){
   return h;
 }
 
-// ---- Feed ----
+/** Affiche la liste des posts dans le feed */
 function renderFeed(){
   var feed = document.getElementById("feed");
   if (!posts.length) {
@@ -371,31 +541,40 @@ function renderFeed(){
   sortedPosts().forEach(function (p) {
     var card = document.createElement("div");
     card.className = "post";
-    card.tabIndex = 0;
+    card.tabIndex = 0;                       // carte accessible au clavier
     card.setAttribute("role", "button");
     card.setAttribute("aria-label", "Ouvrir le post");
     card.innerHTML = postCardHTML(p, false);
-    // Bloque la propagation depuis la zone d'actions (likes / signaler / supprimer)
+
+    // Un clic sur like / signaler / supprimer ne doit PAS ouvrir le post
     var actions = card.querySelector('[data-actions="1"]');
     if (actions) actions.onclick = function (ev) { ev.stopPropagation(); };
+
+    // Clic ou Entrée = ouvrir la page de détail
     card.onclick = function () { openPost(p.id); };
     card.onkeydown = function (ev) { if (ev.key === "Enter") openPost(p.id); };
     feed.appendChild(card);
   });
 }
 
-// ---- Like : un seul par personne ----
+/* ============================================================
+   11. LIKES : UN SEUL PAR PERSONNE
+   likedBy mémorise QUI a liké : on peut liker puis un-liker,
+   mais jamais compter deux fois.
+   ============================================================ */
+
 function toggleLike(id){
   var p = null;
   for (var i = 0; i < posts.length; i++) { if (posts[i].id === id) { p = posts[i]; break; } }
   if (!p) return;
+
   p.likedBy = p.likedBy || [];
   var idx = p.likedBy.indexOf(me.id);
   if (idx !== -1) {
-    p.likedBy.splice(idx, 1);
+    p.likedBy.splice(idx, 1);              // déjà liké → on retire le like
     p.likes = Math.max(0, p.likes - 1);
   } else {
-    p.likedBy.push(me.id);
+    p.likedBy.push(me.id);                 // pas encore liké → on ajoute
     p.likes++;
   }
   savePosts();
@@ -403,19 +582,30 @@ function toggleLike(id){
   else renderFeed();
 }
 
-// ---- Vue détail (page différente via #post/id) ----
+/* ============================================================
+   12. NAVIGATION FEED ⇄ DÉTAIL (via le hash d'URL)
+   #post/<id> = page détail, hash vide = feed.
+   Le bouton retour du navigateur fonctionne grâce à hashchange.
+   ============================================================ */
+
 function openPost(id){ location.hash = "#post/" + id; showDetail(); }
+
+/** Affiche le feed et efface le hash */
 function showFeed(){
   if (location.hash !== "") location.hash = "";
   document.getElementById("feedView").style.display = "block";
   document.getElementById("detailView").style.display = "none";
   renderFeed();
 }
+
+/** Affiche la vue détail */
 function showDetail(){
   document.getElementById("feedView").style.display = "none";
   document.getElementById("detailView").style.display = "block";
   renderDetail();
 }
+
+/** Rend le post correspondant au hash courant */
 function renderDetail(){
   var id = parseInt(location.hash.replace("#post/", ""), 10);
   var p = null;
@@ -425,13 +615,17 @@ function renderDetail(){
   container.innerHTML = '<div class="card">' + postCardHTML(p, true) + '</div>';
 }
 
-// Navigation via hash (retour navigateur supporté)
+// Réagit aux boutons précédent/suivant du navigateur
 window.addEventListener("hashchange", function () {
   if (location.hash.indexOf("#post/") === 0) showDetail();
   else showFeed();
 });
 
-// ---- Démarrage ----
+/* ============================================================
+   13. DÉMARRAGE
+   Onboarding si première visite, sinon on arrive directement
+   sur le feed.
+   ============================================================ */
 if (onboardDone) showApp(); else goStep(1);
 </script>
 </body>
