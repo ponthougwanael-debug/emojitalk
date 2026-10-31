@@ -682,7 +682,7 @@ function renderConvs(){
       '<span class="avatar">' + esc(c.peerEmoji) + '</span>' +
       '<div class="conv-info"><strong>' + esc(c.peerPseudo) + '</strong>' +
       '<span class="conv-last">' + (last ? esc(last.text) : "Nouvelle conversation") + '</span></div>' +
-      '<button type="button" class="delete-btn" onclick="deleteConv(event, \'' + id + '\')" aria-label="Supprimer la conversation">🗑️</button>';
+      '<button type="button" class="delete-btn" aria-label="Supprimer la conversation">🗑️</button>';
     item.onclick = function () { openChat(id); };
     item.onkeydown = function (ev) { if (ev.key === "Enter") openChat(id); };
     // Le clic sur la corbeille ne doit pas ouvrir la conversation
@@ -834,8 +834,7 @@ function buildSettings(){
     });
   });
 
-  // Le bouton "Enregistrer" validera ce brouillon
-  document.getElementById("settingsSaveHolder").setAttribute("data-draft", "1");
+  // Le brouillon est conservé jusqu'au clic sur "Enregistrer"
   window._settingsDraft = draft;
 }
 
