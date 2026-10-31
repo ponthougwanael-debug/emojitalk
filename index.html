@@ -21,12 +21,19 @@
   <button onclick="location.reload()">🔄 Actualiser</button>
 </header>
 
+<!-- Conteneur des notifications toast (créées dynamiquement par showToast) -->
+<div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
 <!-- ============================================================
      ONBOARDING : 3 étapes obligatoires (emoji → intérêts → personnalité)
      On ne peut pas passer une étape : chaque bouton valide avant de continuer.
+     Une barre de progression indique où on en est.
      ============================================================ -->
 <div id="onboarding" style="max-width:700px; margin:24px auto; padding:0 16px;">
   <div class="card">
+
+    <!-- Barre de progression : se remplit à chaque étape validée -->
+    <div class="progress-bar" aria-hidden="true"><div class="progress-fill" id="progressFill"></div></div>
 
     <!-- Étape 1 : Emoji (liste prédéfinie OU champ libre) -->
     <div id="step1">
@@ -67,13 +74,18 @@
 <div id="app" style="display:none;">
   <div class="container" style="grid-template-columns:1fr;">
 
-    <!-- Vue Feed : création de post + tri + liste -->
+    <!-- Vue Feed : création de post + recherche + tri + liste -->
     <main id="feedView">
       <div class="card">
         <h2>✍️ Créer un post</h2>
         <textarea id="postText" rows="3" maxlength="500" placeholder="Quoi de neuf ? (500 caractères max)" aria-label="Contenu du post"></textarea>
         <div class="char-counter" id="charCounter">0 / 500</div>
         <button onclick="createPost()">Publier</button>
+      </div>
+
+      <!-- Recherche en direct : filtre les posts au fur et à mesure de la saisie -->
+      <div class="search-input">
+        <input type="text" id="searchInput" placeholder="🔍 Rechercher dans les posts..." aria-label="Rechercher un post">
       </div>
 
       <!-- Barre de tri : récents ou populaires -->
@@ -118,9 +130,8 @@ var MAX_LEN = 500;
 // Animaux utilisés pour générer les pseudos aléatoires ("Renard-42")
 var PSEUDO_ANIMALS = ["Renard","Panda","Hibou","Tigre","Poulpe","Lynx","Renardeau","Koala","Faucon","Orque"];
 
-// Filtre de mots interdits — modération BASIQUE, facilement contournable
-// (espaces, caractères spéciaux...). Le système de signalement des users
-// reste la vraie protection en attendant une modération côté serveur.
+// Filtre de mots interdits — modération BASIQUE, facilement contournable.
+// Le système de signalement reste la vraie protection côté client.
 var BANNED_WORDS = ["connard","enculé","salope","pute","ntm","tg","fdp","batard","bâtard","encule"];
 
 /**
@@ -138,8 +149,8 @@ function containsBanned(text){
 
 /* ============================================================
    2. SÉCURITÉ : ÉCHAPPEMENT XSS
-   Tout contenu affiché (texte des posts, emoji libre, tags) passe
-   par esc() : les caractères HTML dangereux sont neutralisés.
+   Tout contenu affiché passe par esc() : les caractères HTML
+   dangereux sont neutralisés.
    ============================================================ */
 
 /**
@@ -161,7 +172,34 @@ function esc(s){
 function escMultiline(s){ return esc(s).replace(/\n/g, "<br>"); }
 
 /* ============================================================
-   3. STOCKAGE LOCAL (localStorage)
+   3. NOTIFICATIONS TOAST
+   Remplacent les alert() bloquantes : un message apparaît en bas
+   à droite et disparaît tout seul après 3 secondes.
+   ============================================================ */
+
+/**
+ * Affiche une notification toast.
+ * @param {string} message - texte à afficher
+ * @param {string} [type] - "success", "error" ou vide (info)
+ */
+function showToast(message, type){
+  var container = document.getElementById("toastContainer");
+  var t = document.createElement("div");
+  t.className = "toast" + (type ? " " + type : "");
+  t.setAttribute("role", "status");
+  t.textContent = message;
+  container.appendChild(t);
+
+  // Disparition automatique : on ajoute la classe .hide (animation CSS),
+  // puis on retire l'élément du DOM une fois l'animation terminée.
+  setTimeout(function () {
+    t.classList.add("hide");
+    setTimeout(function () { t.remove(); }, 300);
+  }, 3000);
+}
+
+/* ============================================================
+   4. STOCKAGE LOCAL (localStorage)
    NOTE : chaque visiteur ne voit que SES posts. Pour un vrai feed
    partagé, il faudra brancher un backend (ex : Supabase).
    ============================================================ */
@@ -201,9 +239,7 @@ if (migrationNeeded) savePosts();
 // et à identifier le propriétaire d'un post (droit de suppression).
 if (!me.id) { me.id = "anon-" + Math.random().toString(36).slice(2, 9); saveMe(); }
 
-// Pseudo lisible généré une seule fois (ex : "Renard-42").
-// Résout le problème : deux personnes avec le même emoji étaient
-// indistinguables dans le feed.
+// Pseudo lisible généré une seule fois (ex : "Renard-42")
 if (!me.pseudo) {
   me.pseudo = PSEUDO_ANIMALS[Math.floor(Math.random() * PSEUDO_ANIMALS.length)]
             + "-" + Math.floor(10 + Math.random() * 90);
@@ -211,7 +247,7 @@ if (!me.pseudo) {
 }
 
 /* ============================================================
-   4. ONBOARDING : CONSTRUCTION DES SÉLECTEURS
+   5. ONBOARDING : CONSTRUCTION DES SÉLECTEURS
    ============================================================ */
 
 var onboardDone = localStorage.getItem("emojitalk_onboarded") === "1";
@@ -225,7 +261,7 @@ EMOJIS.forEach(function (e) {
   b.setAttribute("aria-label", "Choisir l'emoji " + e);
   b.onclick = function () {
     me.emoji = e; saveMe();
-    document.getElementById("customEmoji").value = "";       // vide le champ libre
+    document.getElementById("customEmoji").value = "";         // vide le champ libre
     document.getElementById("errStep1").style.display = "none"; // cache l'erreur
   };
   onboardEmojiPicker.appendChild(b);
@@ -285,9 +321,14 @@ PERSONALITIES.forEach(function (p) {
 });
 
 /* ============================================================
-   5. ONBOARDING : VALIDATION DES ÉTAPES
+   6. ONBOARDING : VALIDATION DES ÉTAPES + BARRE DE PROGRESSION
    Impossible de continuer sans avoir validé l'étape en cours.
    ============================================================ */
+
+/** Met à jour la barre de progression (33 % / 66 % / 100 %) */
+function setProgress(n){
+  document.getElementById("progressFill").style.width = (n * 33.33) + "%";
+}
 
 /** Étape 1 : un emoji est obligatoire */
 function validateStep1(){
@@ -315,14 +356,17 @@ function finishOnboarding(){
   }
   onboardDone = true;
   localStorage.setItem("emojitalk_onboarded", "1");
+  setProgress(3);
+  showToast("🎉 Bienvenue " + me.pseudo + " !", "success");
   showApp();
 }
 
-/** Affiche l'étape n (1, 2 ou 3) et masque les autres */
+/** Affiche l'étape n (1, 2 ou 3) et met à jour la progression */
 function goStep(n){
   document.getElementById("step1").style.display = n === 1 ? "block" : "none";
   document.getElementById("step2").style.display = n === 2 ? "block" : "none";
   document.getElementById("step3").style.display = n === 3 ? "block" : "none";
+  setProgress(n);
 }
 
 /** Passe de l'onboarding à l'application */
@@ -333,7 +377,7 @@ function showApp(){
 }
 
 /* ============================================================
-   6. CRÉATION DE POST
+   7. CRÉATION DE POST
    ============================================================ */
 
 // Rate limiting : 1 post maximum toutes les 10 secondes
@@ -341,16 +385,16 @@ var RATE_KEY = "emojitalk_lastPost";
 function rateLimited(){
   var last = parseInt(localStorage.getItem(RATE_KEY) || "0", 10);
   var wait = 10000 - (Date.now() - last);
-  if (wait > 0){ alert("⏳ Un peu de patience ! Réessaie dans " + Math.ceil(wait/1000) + "s."); return true; }
+  if (wait > 0){ showToast("⏳ Réessaie dans " + Math.ceil(wait/1000) + "s.", "error"); return true; }
   return false;
 }
 
 /** Publie un post après validation (vide, longueur, filtre, rate limit) */
 function createPost(){
   var text = document.getElementById("postText").value.trim();
-  if (!text) { alert("Écris quelque chose ! 🙂"); return; }
-  if (text.length > MAX_LEN) { alert("Post trop long (max " + MAX_LEN + " caractères)."); return; }
-  if (containsBanned(text)) { alert("🚫 Ton post contient des mots inappropriés. Merci de rester respectueux."); return; }
+  if (!text) { showToast("Écris quelque chose ! 🙂", "error"); return; }
+  if (text.length > MAX_LEN) { showToast("Post trop long (max " + MAX_LEN + ").", "error"); return; }
+  if (containsBanned(text)) { showToast("🚫 Mots inappropriés détectés. Restons respectueux.", "error"); return; }
   if (rateLimited()) return;
 
   // On fige l'emoji / les tags / le pseudo au moment de la publication :
@@ -375,6 +419,7 @@ function createPost(){
   // Réinitialise la zone de saisie
   document.getElementById("postText").value = "";
   updateCounter();
+  showToast("✅ Post publié !", "success");
   if (location.hash.indexOf("#post/") === 0) showFeed();
   else { renderFeed(); renderDetail(); }
 }
@@ -403,7 +448,7 @@ function relativeDate(timestamp){
 }
 
 /* ============================================================
-   7. SUPPRESSION AVEC ANNULATION (10 secondes)
+   8. SUPPRESSION AVEC ANNULATION (10 secondes)
    ============================================================ */
 
 var undoTimer = null, lastDeleted = null, lastIndex = 0;
@@ -421,6 +466,7 @@ function deletePostSafe(id){
 
   var area = document.getElementById("undoArea");
   area.innerHTML = '<div class="undo-box" role="status"><span>🗑️ Post supprimé.</span><button type="button" onclick="undoRestore()">↩️ Annuler</button></div>';
+  showToast("🗑️ Post supprimé (annulable 10 s).");
   clearTimeout(undoTimer);
   undoTimer = setTimeout(function () { lastDeleted = null; area.innerHTML = ""; }, 10000);
 }
@@ -434,11 +480,12 @@ function undoRestore(){
     lastDeleted = null;
   }
   document.getElementById("undoArea").innerHTML = "";
+  showToast("↩️ Post restauré.", "success");
   renderFeed();
 }
 
 /* ============================================================
-   8. SIGNALEMENT
+   9. SIGNALEMENT
    1 signalement par personne et par post. À partir de 3
    signalements, le post est retiré automatiquement.
    ============================================================ */
@@ -456,19 +503,26 @@ function reportPost(id){
 
   if (p.reports >= 3) {
     posts = posts.filter(function (x) { return x.id !== id; });
-    alert("🚩 Post signalé par plusieurs personnes et retiré du feed.");
+    showToast("🚩 Post retiré après plusieurs signalements.", "success");
   } else {
-    alert("🚩 Merci, ton signalement a été pris en compte.");
+    showToast("🚩 Signalement pris en compte. Merci !", "success");
   }
   savePosts();
   renderFeed(); renderDetail();
 }
 
 /* ============================================================
-   9. TRI DU FEED
+   10. RECHERCHE + TRI DU FEED
    ============================================================ */
 
-var sortMode = "recent"; // "recent" ou "popular"
+var sortMode = "recent";   // "recent" ou "popular"
+var searchTerm = "";       // terme de recherche en cours
+
+// Filtre en direct : chaque frappe relance le rendu du feed
+document.getElementById("searchInput").addEventListener("input", function (ev) {
+  searchTerm = ev.target.value.toLowerCase().trim();
+  renderFeed();
+});
 
 /** Change le mode de tri et rafraîchit le feed */
 function setSort(mode){
@@ -478,16 +532,24 @@ function setSort(mode){
   renderFeed();
 }
 
-/** Retourne une copie triée des posts (sans modifier l'original) */
+/**
+ * Retourne les posts filtrés par la recherche puis triés.
+ * La recherche porte sur le texte, le pseudo et les tags.
+ */
 function sortedPosts(){
-  var arr = posts.slice();
+  var arr = posts.filter(function (p) {
+    if (!searchTerm) return true;
+    var haystack = (p.text + " " + (p.authorPseudo || "") + " "
+      + p.authorInterests.join(" ") + " " + p.authorPersonality.join(" ")).toLowerCase();
+    return haystack.indexOf(searchTerm) !== -1;
+  });
   if (sortMode === "popular") arr.sort(function (a, b) { return (b.likes - a.likes) || (b.date - a.date); });
   else arr.sort(function (a, b) { return b.date - a.date; });
   return arr;
 }
 
 /* ============================================================
-   10. RENDU : CARTES DE POST, FEED, DÉTAIL
+   11. RENDU : CARTES DE POST, FEED, DÉTAIL
    ============================================================ */
 
 /**
@@ -497,7 +559,7 @@ function sortedPosts(){
  * @returns {string} HTML (tout contenu utilisateur déjà échappé)
  */
 function postCardHTML(p, isDetail){
-  var liked = p.likedBy.indexOf(me.id) !== -1;    // ai-je déjà liké ?
+  var liked = p.likedBy.indexOf(me.id) !== -1;       // ai-je déjà liké ?
   var reported = p.reportedBy.indexOf(me.id) !== -1; // ai-je déjà signalé ?
   var h = "";
 
@@ -533,12 +595,20 @@ function postCardHTML(p, isDetail){
 /** Affiche la liste des posts dans le feed */
 function renderFeed(){
   var feed = document.getElementById("feed");
+  var list = sortedPosts();
+
   if (!posts.length) {
     feed.innerHTML = '<div class="empty">Aucun post. Lance la discussion ! 🚀</div>';
     return;
   }
+  if (!list.length) {
+    // Des posts existent mais aucun ne correspond à la recherche
+    feed.innerHTML = '<div class="empty">Aucun résultat pour ta recherche. 🔍</div>';
+    return;
+  }
+
   feed.innerHTML = "";
-  sortedPosts().forEach(function (p) {
+  list.forEach(function (p) {
     var card = document.createElement("div");
     card.className = "post";
     card.tabIndex = 0;                       // carte accessible au clavier
@@ -558,7 +628,7 @@ function renderFeed(){
 }
 
 /* ============================================================
-   11. LIKES : UN SEUL PAR PERSONNE
+   12. LIKES : UN SEUL PAR PERSONNE
    likedBy mémorise QUI a liké : on peut liker puis un-liker,
    mais jamais compter deux fois.
    ============================================================ */
@@ -576,6 +646,7 @@ function toggleLike(id){
   } else {
     p.likedBy.push(me.id);                 // pas encore liké → on ajoute
     p.likes++;
+    showToast("❤️ Merci pour ton like !");
   }
   savePosts();
   if (location.hash.indexOf("#post/") === 0) renderDetail();
@@ -583,7 +654,7 @@ function toggleLike(id){
 }
 
 /* ============================================================
-   12. NAVIGATION FEED ⇄ DÉTAIL (via le hash d'URL)
+   13. NAVIGATION FEED ⇄ DÉTAIL (via le hash d'URL)
    #post/<id> = page détail, hash vide = feed.
    Le bouton retour du navigateur fonctionne grâce à hashchange.
    ============================================================ */
@@ -622,7 +693,7 @@ window.addEventListener("hashchange", function () {
 });
 
 /* ============================================================
-   13. DÉMARRAGE
+   14. DÉMARRAGE
    Onboarding si première visite, sinon on arrive directement
    sur le feed.
    ============================================================ */
