@@ -18,8 +18,12 @@ var INTERESTS = ["Technologie","Sport","Musique","Cinéma","Voyage","Cuisine","J
 // Traits de personnalité disponibles
 var PERSONALITIES = ["Extraverti","Introverti","Rigolo","Sérieux","Curieux","Rêveur","Sociable","Calme","Aventurier","Créatif"];
 
-// Longueur maximale d'un post
+// Longueur maximale d'un post / d'un message privé
 var MAX_LEN = 500;
+var MAX_MSG_LEN = 300;
+
+// Délai pendant lequel on peut modifier son propre post (5 minutes)
+var EDIT_WINDOW = 5 * 60 * 1000;
 
 // Animaux utilisés pour générer les pseudos aléatoires ("Renard-42")
 var PSEUDO_ANIMALS = ["Renard","Panda","Hibou","Tigre","Poulpe","Lynx","Renardeau","Koala","Faucon","Orque"];
@@ -102,6 +106,7 @@ function showToast(message, type){
 var ME_KEY    = "emojitalk_me";     // profil de l'utilisateur courant
 var POSTS_KEY = "emojitalk_posts";  // liste des posts
 var MSGS_KEY  = "emojitalk_msgs";   // conversations privées
+var VIEW_KEY  = "emojitalk_view";   // dernier onglet visité (feed/messages/settings)
 
 // Chargement du profil (valeurs par défaut si première visite)
 var me = JSON.parse(localStorage.getItem(ME_KEY) || '{"emoji":"","interests":[],"personality":[]}');
@@ -118,7 +123,7 @@ if (typeof convs !== "object" || convs === null || Array.isArray(convs)) convs =
 
 /**
  * Migration : complète les anciens posts qui n'ont pas les nouveaux
- * champs (likedBy, reports...). Évite un plantage au rendu.
+ * champs (likedBy, reports, parentId...). Évite un plantage au rendu.
  */
 var migrationNeeded = false;
 posts.forEach(function (p) {
@@ -127,6 +132,8 @@ posts.forEach(function (p) {
   if (!Array.isArray(p.reportedBy)) { p.reportedBy = []; migrationNeeded = true; }
   if (!Array.isArray(p.authorInterests))   p.authorInterests = [];
   if (!Array.isArray(p.authorPersonality)) p.authorPersonality = [];
+  if (typeof p.parentId === "undefined") { p.parentId = null; migrationNeeded = true; } // réponses aux posts
+  if (typeof p.edited === "undefined")   { p.edited = false; migrationNeeded = true; } // badge "(modifié)"
 });
 
 /** Sauvegarde le profil dans localStorage */
@@ -271,15 +278,17 @@ function goStep(n){
   setProgress(n);
 }
 
-/** Passe de l'onboarding à l'application */
+/** Passe de l'onboarding à l'application (en restaurant le dernier onglet) */
 function showApp(){
   document.getElementById("onboarding").style.display = "none";
   document.getElementById("app").style.display = "block";
-  navTo("feed");
+  // Si l'utilisateur recharge la page, on le ramène à son dernier onglet
+  var saved = localStorage.getItem(VIEW_KEY);
+  navTo(saved === "messages" || saved === "settings" ? saved : "feed");
 }
 
 /* ============================================================
-   7. CRÉATION DE POST
+   7. CRÉATION / MODIFICATION DE POST
    ============================================================ */
 
 // Rate limiting : 1 post maximum toutes les 10 secondes
@@ -291,9 +300,87 @@ function rateLimited(){
   return false;
 }
 
-/** Publie un post après validation (vide, longueur, filtre, rate limit) */
+// --- État d'édition ---
+// editingId : id du post en cours de modification (ou null)
+// replyToId : id du post auquel on répond (ou null)
+var editingId = null;
+var replyToId = null;
+
+/**
+ * Charge un post existant dans la zone de texte pour le modifier.
+ * Uniquement possible pendant les 5 minutes suivant la publication.
+ * @param {number} id - id du post à modifier
+ */
+function startEdit(id){
+  var p = null;
+  for (var i = 0; i < posts.length; i++) { if (posts[i].id === id) { p = posts[i]; break; } }
+  if (!p) return;
+  if (p.authorId !== me.id) return;                       // ses posts : interdit
+  if (Date.now() - p.date > EDIT_WINDOW) {                // délai dépassé
+    showToast("⏱️ La modification n'est possible que 5 minutes après la publication.", "error");
+    return;
+  }
+  editingId = id;
+  document.getElementById("postText").value = p.text;
+  updateCounter();
+  document.getElementById("postText").focus();
+  showToast("✏️ Modifie le texte puis clique sur « Mettre à jour ».");
+}
+
+/** Annule le mode édition (utilisé par le bouton sous la zone de texte) */
+function cancelEdit(){
+  editingId = null;
+  document.getElementById("postText").value = "";
+  updateCounter();
+  renderEditBar();
+  renderFeed();
+}
+
+/** Affiche la barre "modification en cours / réponse en cours" au-dessus de la zone de texte */
+function renderEditBar(){
+  var bar = document.getElementById("editBar");
+  if (!bar) return;
+  if (editingId !== null) {
+    bar.innerHTML = '<div class="undo-box" role="status"><span>✏️ Modification d\'un post en cours.</span><button type="button" onclick="cancelEdit()">✖ Annuler</button></div>';
+  } else {
+    bar.innerHTML = "";
+  }
+}
+
+/**
+ * Publie un post (ou met à jour le post en cours d'édition).
+ * Si replyToId est défini, le post devient une réponse à ce post.
+ */
 function createPost(){
   var text = document.getElementById("postText").value.trim();
+
+  // ----- Mode édition : on remplace le texte du post existant -----
+  if (editingId !== null) {
+    var ep = null;
+    for (var i = 0; i < posts.length; i++) { if (posts[i].id === editingId) { ep = posts[i]; break; } }
+    if (!ep || ep.authorId !== me.id || Date.now() - ep.date > EDIT_WINDOW) {
+      editingId = null; renderEditBar();
+    } else if (!text) {
+      showToast("Écris quelque chose ! 🙂", "error"); return;
+    } else if (text.length > MAX_LEN) {
+      showToast("Post trop long (max " + MAX_LEN + ").", "error"); return;
+    } else if (containsBanned(text)) {
+      showToast("🚫 Mots inappropriés détectés. Restons respectueux.", "error"); return;
+    } else {
+      ep.text = text;
+      ep.edited = true;                    // badge "(modifié)" affiché sur la carte
+      savePosts();
+      editingId = null;
+      document.getElementById("postText").value = "";
+      updateCounter();
+      renderEditBar();
+      showToast("✅ Post modifié !", "success");
+      renderFeed(); renderDetail();
+      return;
+    }
+  }
+
+  // ----- Mode création classique -----
   if (!text) { showToast("Écris quelque chose ! 🙂", "error"); return; }
   if (text.length > MAX_LEN) { showToast("Post trop long (max " + MAX_LEN + ").", "error"); return; }
   if (containsBanned(text)) { showToast("🚫 Mots inappropriés détectés. Restons respectueux.", "error"); return; }
@@ -313,14 +400,18 @@ function createPost(){
     likedBy: [],
     reports: 0,
     reportedBy: [],
+    parentId: replyToId,       // non-null = c'est une réponse à un autre post
+    edited: false,
     date: Date.now()
   });
+  replyToId = null;            // la réponse est publiée, on repart à zéro
   savePosts();
   localStorage.setItem(RATE_KEY, String(Date.now()));
 
   // Réinitialise la zone de saisie
   document.getElementById("postText").value = "";
   updateCounter();
+  renderEditBar();
   showToast("✅ Post publié !", "success");
   if (location.hash.indexOf("#post/") === 0) showFeed();
   else { renderFeed(); renderDetail(); }
@@ -435,11 +526,14 @@ function setSort(mode){
 }
 
 /**
- * Retourne les posts filtrés par la recherche puis triés.
+ * Retourne les posts à afficher dans le feed : on exclut les réponses
+ * (elles apparaissent dans la vue détail de leur post parent), puis on
+ * filtre par la recherche et on trie.
  * La recherche porte sur le texte, le pseudo et les tags.
  */
 function sortedPosts(){
   var arr = posts.filter(function (p) {
+    if (p.parentId) return false;   // les réponses ne s'affichent pas dans le feed
     if (!searchTerm) return true;
     var haystack = (p.text + " " + (p.authorPseudo || "") + " "
       + p.authorInterests.join(" ") + " " + p.authorPersonality.join(" ")).toLowerCase();
@@ -448,6 +542,13 @@ function sortedPosts(){
   if (sortMode === "popular") arr.sort(function (a, b) { return (b.likes - a.likes) || (b.date - a.date); });
   else arr.sort(function (a, b) { return b.date - a.date; });
   return arr;
+}
+
+/** Retourne le nombre de réponses d'un post */
+function replyCount(id){
+  var n = 0;
+  posts.forEach(function (p) { if (p.parentId === id) n++; });
+  return n;
 }
 
 /* ============================================================
@@ -465,11 +566,11 @@ function postCardHTML(p, isDetail){
   var reported = p.reportedBy.indexOf(me.id) !== -1; // ai-je déjà signalé ?
   var h = "";
 
-  // En-tête : avatar + pseudo + date relative
+  // En-tête : avatar + pseudo + date relative (+ badge "modifié")
   h += '<div class="post-head">';
   h += '<span class="avatar" aria-hidden="true"' + (isDetail ? ' style="font-size:3rem;"' : '') + '>' + esc(p.authorEmoji) + '</span>';
   h += '<div><strong>' + esc(p.authorPseudo || "Anonyme") + ' ' + esc(p.authorEmoji) + '</strong><br>';
-  h += '<time>' + relativeDate(p.date) + '</time></div>';
+  h += '<time>' + relativeDate(p.date) + (p.edited ? ' · <em>(modifié)</em>' : '') + '</time></div>';
   h += '</div>';
 
   // Texte du post (échappé, retours à la ligne conservés)
@@ -485,14 +586,24 @@ function postCardHTML(p, isDetail){
   // pour ne pas déclencher l'ouverture du post.
   h += '<div data-actions="1">';
   h += '<button type="button" class="like' + (liked ? " liked" : "") + '" onclick="toggleLike(' + p.id + ')" aria-label="Aimer ce post">' + (liked ? "❤️" : "🤍") + " " + p.likes + (isDetail ? " j'aime" : "") + '</button>';
+
+  // Dans le feed : lien vers le détail + nombre de réponses
+  if (!isDetail) {
+    var rc = replyCount(p.id);
+    h += '<button type="button" class="mp-btn" onclick="openPost(' + p.id + ')" aria-label="Voir les réponses">💬 ' + rc + '</button>';
+  }
   h += '<button type="button" class="report-btn' + (reported ? " reported" : "") + '" onclick="reportPost(' + p.id + ')" aria-label="Signaler ce post"' + (reported ? " disabled" : "") + '>🚩 ' + (reported ? "Signalé" : "Signaler") + '</button>';
   // Bouton message privé : uniquement pour les posts des AUTRES
   if (p.authorId !== me.id) {
     h += '<button type="button" class="mp-btn" onclick="startConv(\'' + p.authorId + '\')">💬 MP</button>';
   }
-  // Bouton supprimer : uniquement pour l'auteur du post
+  // Boutons modifier / supprimer : uniquement pour l'auteur du post
   if (p.authorId === me.id) {
     h += '<button type="button" class="delete-btn" onclick="deletePostSafe(' + p.id + ')">🗑️ ' + (isDetail ? "Supprimer mon post" : "Supprimer") + '</button>';
+    // Modification possible pendant 5 minutes après publication
+    if (Date.now() - p.date < EDIT_WINDOW) {
+      h += '<button type="button" class="mp-btn" onclick="startEdit(' + p.id + ')">✏️ ' + (isDetail ? "Modifier mon post" : "Modifier") + '</button>';
+    }
   }
   h += '</div>';
   return h;
@@ -562,9 +673,11 @@ function toggleLike(id){
    13. NAVIGATION : BARRE DU BAS + FEED ⇄ DÉTAIL
    La bottom-nav bascule entre feed / messages / paramètres.
    Le hash #post/<id> ouvre le détail d'un post depuis le feed.
+   L'onglet actif est mémorisé : un rechargement de page ramène
+   à la vue où l'utilisateur était.
    ============================================================ */
 
-/** Ouvre un post en vue détail */
+/** Ouvre un post en vue détail (et prépare le mode "réponse" si besoin) */
 function openPost(id){ location.hash = "#post/" + id; showDetail(); }
 
 /** Affiche le feed et efface le hash */
@@ -582,14 +695,71 @@ function showDetail(){
   renderDetail();
 }
 
-/** Rend le post correspondant au hash courant */
+/**
+ * Rend le post correspondant au hash courant, avec ses réponses
+ * (posts dont parentId = id, triées du plus ancien au plus récent)
+ * et une zone de réponse.
+ */
 function renderDetail(){
   var id = parseInt(location.hash.replace("#post/", ""), 10);
   var p = null;
   for (var i = 0; i < posts.length; i++) { if (posts[i].id === id) { p = posts[i]; break; } }
   var container = document.getElementById("postDetail");
   if (!p) { container.innerHTML = '<div class="empty">Post introuvable. 😕</div>'; return; }
-  container.innerHTML = '<div class="card">' + postCardHTML(p, true) + '</div>';
+
+  // Post parent
+  var h = '<div class="card">' + postCardHTML(p, true) + '</div>';
+
+  // Réponses existantes (du plus ancien au plus récent)
+  var replies = posts.filter(function (x) { return x.parentId === id; })
+                     .sort(function (a, b) { return a.date - b.date; });
+  h += '<h2 style="margin:18px 0 10px;">💬 ' + replies.length + ' réponse' + (replies.length > 1 ? "s" : "") + '</h2>';
+  if (replies.length) {
+    h += '<div id="repliesList">';
+    replies.forEach(function (r) { h += '<div class="post">' + postCardHTML(r, false) + '</div>'; });
+    h += '</div>';
+  }
+
+  // Zone de réponse : pré-remplie avec "@Pseudo " pour répondre à l'auteur
+  h += '<div class="card"><h2>↩️ Répondre</h2>'
+     + '<textarea id="replyText" rows="2" maxlength="' + MAX_LEN + '" placeholder="Ta réponse à ' + esc(p.authorPseudo || "Anonyme") + '... (@Pseudo pour le mentionner)" aria-label="Réponse au post"></textarea>'
+     + '<button onclick="submitReply(' + id + ')">Répondre</button></div>';
+
+  container.innerHTML = h;
+}
+
+/**
+ * Publie une réponse au post ouvert en détail.
+ * La réponse est un post classique avec parentId renseigné :
+ * elle n'apparaît pas dans le feed, mais dans le fil du post parent.
+ * @param {number} parentId - id du post auquel on répond
+ */
+function submitReply(parentId){
+  var ta = document.getElementById("replyText");
+  var text = ta ? ta.value.trim() : "";
+  if (!text) { showToast("Écris une réponse ! 🙂", "error"); return; }
+  if (text.length > MAX_LEN) { showToast("Réponse trop longue (max " + MAX_LEN + ").", "error"); return; }
+  if (containsBanned(text)) { showToast("🚫 Mots inappropriés détectés. Restons respectueux.", "error"); return; }
+
+  posts.unshift({
+    id: Date.now(),
+    authorId: me.id,
+    authorPseudo: me.pseudo,
+    authorEmoji: me.emoji,
+    authorInterests: me.interests.slice(),
+    authorPersonality: (me.personality || []).slice(),
+    text: text,
+    likes: 0,
+    likedBy: [],
+    reports: 0,
+    reportedBy: [],
+    parentId: parentId,   // rattache la réponse à son post parent
+    edited: false,
+    date: Date.now()
+  });
+  savePosts();
+  showToast("✅ Réponse publiée !", "success");
+  renderDetail(); // rafraîchit le fil avec la nouvelle réponse
 }
 
 /**
@@ -601,6 +771,9 @@ function navTo(view){
   if (view !== "feed" || location.hash.indexOf("#post/") !== 0) {
     if (location.hash !== "") { location.hash = ""; return; } // hashchange relance navTo("feed")
   }
+
+  // Mémorise l'onglet actif (restauré au rechargement de la page)
+  localStorage.setItem(VIEW_KEY, view);
 
   // Montre la vue demandée, cache les autres
   document.getElementById("feedView").style.display      = view === "feed"      ? "block" : "none";
@@ -716,6 +889,7 @@ function openChat(peerId){
   renderChatMessages();
   var input = document.getElementById("msgInput");
   input.value = "";
+  updateMsgCounter();
   input.focus();
 }
 
@@ -753,14 +927,26 @@ function sendMessage(){
   var c = convs[currentPeer];
   if (!c) return;
   if (!text) { showToast("Écris un message ! 🙂", "error"); return; }
+  if (text.length > MAX_MSG_LEN) { showToast("Message trop long (max " + MAX_MSG_LEN + ").", "error"); return; }
   if (containsBanned(text)) { showToast("🚫 Mots inappropriés détectés.", "error"); return; }
 
   c.messages.push({ from: "me", text: text, date: Date.now() });
   saveConvs();
   input.value = "";
+  updateMsgCounter();
   renderChatMessages();
   renderConvs();
 }
+
+/** Met à jour le compteur "x / 300" sous la zone de message privé */
+function updateMsgCounter(){
+  var el = document.getElementById("msgCounter");
+  if (!el) return;
+  var len = document.getElementById("msgInput").value.length;
+  el.textContent = len + " / " + MAX_MSG_LEN;
+  el.classList.toggle("limit", len >= MAX_MSG_LEN - 30);
+}
+document.getElementById("msgInput").addEventListener("input", updateMsgCounter);
 
 // Entrée = envoyer le message
 document.getElementById("msgInput").addEventListener("keydown", function (ev) {
@@ -861,8 +1047,18 @@ function resetOnboarding(){
 }
 
 /* ============================================================
-   16. DÉMARRAGE
+   16. BOUTON "RETOUR EN HAUT"
+   Apparaît après 400px de défilement (le bouton est dans le HTML,
+   son affichage est géré ici pour garder la logique en JS).
+   ============================================================ */
+window.addEventListener("scroll", function () {
+  var btn = document.getElementById("toTop");
+  if (btn) btn.style.display = window.scrollY > 400 ? "block" : "none";
+});
+
+/* ============================================================
+   17. DÉMARRAGE
    Onboarding si première visite, sinon on arrive directement
-   sur le feed.
+   sur le feed (ou le dernier onglet visité).
    ============================================================ */
 if (onboardDone) showApp(); else goStep(1);
