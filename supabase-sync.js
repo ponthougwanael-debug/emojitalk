@@ -80,11 +80,38 @@ savePosts = function () {
 
 function pushAllPosts() {
   var rows = posts.slice(0, 200).map(postToRow);
+  if (!rows.length) return; // rien à pousser (tout a été supprimé localement)
   sbClient.from("posts").upsert(rows, { onConflict: "id" })
     .then(function (res) {
       if (res.error) console.warn("[EmojiTalk] Envoi cloud échoué :", res.error.message);
     });
 }
+
+/* --- 4bis. SUPPRESSION RÉELLE dans le cloud ---
+   L'upsert ne peut pas retirer une ligne : sans delete explicite,
+   un post supprimé "ressusciterait" au prochain pull. script.js
+   émet un événement "emojitalk:post-deleted" à chaque suppression. */
+document.addEventListener("emojitalk:post-deleted", function (ev) {
+  if (!cloudReady || !ev.detail || typeof ev.detail.id === "undefined") return;
+  sbClient.from("posts").delete().eq("id", ev.detail.id)
+    .then(function (res) {
+      if (res.error) console.warn("[EmojiTalk] Suppression cloud échouée :", res.error.message);
+    });
+});
+
+/* --- 4ter. SIGNALEMENTS poussés immédiatement ---
+   Quand un post atteint 3 signalements, script.js le retire
+   localement AVANT que l'upsert ne parte : on pousse donc le
+   compteur AVANT la suppression via l'événement
+   "emojitalk:post-reports". */
+document.addEventListener("emojitalk:post-reports", function (ev) {
+  if (!cloudReady || !ev.detail || !ev.detail.post) return;
+  var row = postToRow(ev.detail.post);
+  sbClient.from("posts").upsert(row, { onConflict: "id" })
+    .then(function (res) {
+      if (res.error) console.warn("[EmojiTalk] Signalement cloud échoué :", res.error.message);
+    });
+});
 
 /* --- 5. TIRER : toutes les 5 s, on récupère les posts des autres --- */
 
@@ -103,7 +130,6 @@ function pullPosts() {
       if (res.error) { console.warn("[EmojiTalk] Lecture cloud échouée :", res.error.message); return; }
 
       var remote = (res.data || []).map(rowToPost);
-      if (!remote.length) return;
 
       // Fusion : pour chaque id, on garde la version la plus "riche"
       // (union des likes et des signalements, texte le plus récent).
@@ -131,10 +157,22 @@ function pullPosts() {
         }
       });
 
-      // Un post signalé 3+ fois disparaît partout
+      // Posts disparus du cloud (supprimés ailleurs ou signalés 3+ fois)
+      // → on les retire aussi localement.
       Object.keys(byId).forEach(function (k) {
         if (byId[k].reports >= 3) { delete byId[k]; changed = true; }
       });
+      if (remote.length) {
+        var remoteIds = {};
+        remote.forEach(function (rp) { remoteIds[rp.id] = true; });
+        posts.forEach(function (p) {
+          // On ne retire un post local absent du cloud que s'il vient
+          // du cloud lui-même (sinon on effacerait un post en cours
+          // d'envoi chez un autre visiteur).
+          if (!remoteIds[p.id] && p._fromCloud) { delete byId[p.id]; changed = true; }
+        });
+      }
+      remote.forEach(function (rp) { if (byId[rp.id]) byId[rp.id]._fromCloud = true; });
 
       if (!changed) return;
 
