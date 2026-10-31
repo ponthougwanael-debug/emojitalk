@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>EmojiTalk — Discussions sans compte</title>
 
   <!-- Favicon : emoji 💬 encodé en SVG inline (aucun fichier supplémentaire nécessaire) -->
@@ -11,11 +11,15 @@
   <!-- Le style est séparé dans style.css pour la lisibilité et la mise en cache -->
   <link rel="stylesheet" href="style.css">
   <!--
-    La logique JavaScript est séparée dans script.js.
-    L'attribut "defer" garantit que le script s'exécute APRÈS le
+    La logique JavaScript est séparée en deux fichiers :
+    - script.js : le cœur du site (posts, likes, MPs, paramètres...)
+    - a11y.js   : améliorations d'accessibilité (focus des vues,
+                  aria-current, état vide des conversations)
+    L'attribut "defer" garantit que les scripts s'exécutent APRÈS le
     chargement du HTML (sinon les getElementById échoueraient).
   -->
   <script src="script.js" defer></script>
+  <script src="a11y.js" defer></script>
 </head>
 <body>
 
@@ -44,7 +48,7 @@
     <!-- Étape 1 : Emoji (liste prédéfinie OU champ libre) -->
     <div id="step1">
       <h2>1️⃣ Choisis ton emoji</h2>
-      <p style="color:#64748b; font-size:.9rem;">Choisis un emoji dans la liste ou tape ton propre emoji / caractère.</p>
+      <p style="color:#94a3b8; font-size:.9rem;">Choisis un emoji dans la liste ou tape ton propre emoji / caractère.</p>
       <div class="emoji-picker" id="onboardEmojiPicker" role="group" aria-label="Sélection d'emoji"></div>
       <input type="text" id="customEmoji" maxlength="4" placeholder="Ou tape ton emoji / caractère ici (ex : 🐉 ou ★)" style="margin-top:12px;" aria-label="Emoji personnalisé">
       <p class="error-msg" id="errStep1" role="alert">⚠️ Veuillez sélectionner un emoji ou en saisir un.</p>
@@ -54,7 +58,7 @@
     <!-- Étape 2 : Centres d'intérêt (au moins 1 requis) -->
     <div id="step2" style="display:none;">
       <h2>2️⃣ Tes centres d'intérêt</h2>
-      <p style="color:#64748b; font-size:.9rem;">Sélectionne au moins un centre d'intérêt. Ils seront affichés sur chacun de tes posts.</p>
+      <p style="color:#94a3b8; font-size:.9rem;">Sélectionne au moins un centre d'intérêt. Ils seront affichés sur chacun de tes posts.</p>
       <div class="interests" id="onboardInterestPicker" role="group" aria-label="Centres d'intérêt"></div>
       <p class="error-msg" id="errStep2" role="alert">⚠️ Veuillez sélectionner au moins un centre d'intérêt.</p>
       <button onclick="validateStep2()">Continuer →</button>
@@ -63,7 +67,7 @@
     <!-- Étape 3 : Personnalité (au moins 1 requise) -->
     <div id="step3" style="display:none;">
       <h2>3️⃣ Ta personnalité</h2>
-      <p style="color:#64748b; font-size:.9rem;">Sélectionne au moins un trait de personnalité.</p>
+      <p style="color:#94a3b8; font-size:.9rem;">Sélectionne au moins un trait de personnalité.</p>
       <div class="interests" id="onboardPersonalityPicker" role="group" aria-label="Personnalité"></div>
       <p class="error-msg" id="errStep3" role="alert">⚠️ Veuillez sélectionner au moins une personnalité.</p>
       <button onclick="finishOnboarding()">🚀 Entrer dans le feed</button>
@@ -138,7 +142,7 @@
     <main id="settingsView" style="display:none;">
       <div class="card">
         <h2>⚙️ Paramètres</h2>
-        <p style="color:#64748b; font-size:.9rem;">Ton pseudo anonyme : <strong id="settingsPseudo" style="color:#38bdf8;"></strong></p>
+        <p style="color:#94a3b8; font-size:.9rem;">Ton pseudo anonyme : <strong id="settingsPseudo" style="color:#38bdf8;"></strong></p>
 
         <h2 style="margin-top:20px;">😀 Ton emoji</h2>
         <div class="emoji-picker" id="settingsEmojiPicker" role="group" aria-label="Sélection d'emoji"></div>
@@ -156,7 +160,7 @@
 
       <div class="card">
         <h2>♻️ Recommencer</h2>
-        <p style="color:#64748b; font-size:.9rem;">Efface ton profil et refais l'onboarding. Tes posts seront conservés.</p>
+        <p style="color:#94a3b8; font-size:.9rem;">Efface ton profil et refais l'onboarding. Tes posts seront conservés.</p>
         <button class="delete-btn" onclick="resetOnboarding()">🔄 Refaire l'onboarding</button>
       </div>
     </main>
