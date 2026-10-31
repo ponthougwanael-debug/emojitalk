@@ -61,7 +61,9 @@
       <h2>1️⃣ Choisis ton emoji</h2>
       <p style="color:#94a3b8; font-size:.9rem;">Choisis un emoji dans la liste ou tape ton propre emoji / caractère. Ton emoji sera ton identité unique sur le site.</p>
       <div class="emoji-picker" id="onboardEmojiPicker" role="group" aria-label="Sélection d'emoji"></div>
-      <input type="text" id="customEmoji" maxlength="4" placeholder="Ou tape ton emoji / caractère ici (ex : 🐉 ou ★)" style="margin-top:12px;" aria-label="Emoji personnalisé">
+      <!-- maxlength=8 : certains emojis (drapeaux, familles, skin tones)
+           comptent plus de 4 unités UTF-16 et seraient coupés avec 4 -->
+      <input type="text" id="customEmoji" maxlength="8" placeholder="Ou tape ton emoji / caractère ici (ex : 🐉 ou ★)" style="margin-top:12px;" aria-label="Emoji personnalisé">
       <p class="error-msg" id="errStep1" role="alert">⚠️ Veuillez sélectionner un emoji ou en saisir un.</p>
       <button onclick="validateStep1()">Continuer →</button>
     </div>
@@ -161,7 +163,7 @@
 
         <h2 style="margin-top:20px;">😀 Ton emoji</h2>
         <div class="emoji-picker" id="settingsEmojiPicker" role="group" aria-label="Sélection d'emoji"></div>
-        <input type="text" id="settingsCustomEmoji" maxlength="4" placeholder="Ou tape ton propre emoji / caractère" style="margin-top:12px;" aria-label="Emoji personnalisé">
+        <input type="text" id="settingsCustomEmoji" maxlength="8" placeholder="Ou tape ton propre emoji / caractère" style="margin-top:12px;" aria-label="Emoji personnalisé">
 
         <h2 style="margin-top:20px;">🎯 Tes centres d'intérêt</h2>
         <div class="interests" id="settingsInterestPicker" role="group" aria-label="Centres d'intérêt"></div>
