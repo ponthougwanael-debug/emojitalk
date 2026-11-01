@@ -159,6 +159,40 @@ document.addEventListener("emojitalk:post-deleted", function (ev) {
     });
 });
 
+/* --- 4quinquies. SUPPRESSION DE COMPTE dans le cloud ---
+   account.js émet "emojitalk:account-deleted" avec l'ID de l'auteur.
+   AVANT ce correctif : aucun listener n'existait pour cet
+   événement → les lignes de l'auteur restaient dans la table
+   cloud "posts" et revenaient à la prochaine synchronisation,
+   même après la suppression du profil (sur PC ET mobile).
+   On supprime donc ici TOUTES les lignes de l'auteur :
+   - ses posts/réponses dans la table "posts" ;
+   - ses pierres tombales partagées (pour tous les appareils) ;
+   - ses messages privés dans la table "messages". */
+document.addEventListener("emojitalk:account-deleted", function (ev) {
+  if (!cloudReady || !ev.detail || !ev.detail.authorId) return;
+  var authorId = ev.detail.authorId;
+  var postIds = ev.detail.postIds || [];
+
+  // 1. Pierres tombales partagées : plus aucun appareil ne
+  //    réintégrera un de ces posts, même avec une copie périmée.
+  postIds.forEach(function (id) { pushTombstone(id); });
+
+  // 2. Supprime toutes les lignes de l'auteur dans le cloud.
+  clearTimeout(pushTimer); // évite un push groupé juste après
+  sbClient.from("posts").delete().eq("author_id", authorId)
+    .then(function (res) {
+      if (res.error) console.warn("[EmojiTalk] Suppression des posts cloud échouée :", res.error.message);
+    });
+
+  // 3. Supprime aussi ses messages privés (deux sens :
+  //    envoyés et reçus par ce compte).
+  sbClient.from("messages").delete().or("from_id.eq." + authorId + ",to_id.eq." + authorId)
+    .then(function (res) {
+      if (res.error) console.warn("[EmojiTalk] Suppression des MP cloud échouée :", res.error.message);
+    });
+});
+
 /* --- 4ter. UN-LIKE retiré réellement dans le cloud --- */
 document.addEventListener("emojitalk:post-unliked", function (ev) {
   if (!cloudReady || !ev.detail || !ev.detail.post || !ev.detail.userId) return;
@@ -305,8 +339,7 @@ if (cloudReady) {
 }
 
 /* ============================================================
-   NOTE — Messages privés : ils restent locaux pour l'instant
-   (chaque navigateur voit ses conversations). Une table "messages"
-   partagée sera la prochaine étape si tu veux les MP entre
-   visiteurs anonymes.
+   NOTE — Messages privés : ils sont synchronisés via la table
+   "messages" par mp-sync.js (envoi à chaque saveConvs(),
+   réception toutes les 4 s). Voir mp-sync.js et mp-supabase.sql.
    ============================================================ */
