@@ -19,24 +19,21 @@
     La logique JavaScript est séparée en plusieurs fichiers :
     - script.js           : le cœur du site (posts, likes, MPs, paramètres...)
     - supabase-sync.js    : synchronisation cloud du feed entre visiteurs
-    - profile.js          : identité par emoji + fiche profil au clic sur l'avatar
-    - emoji-distinguish.js: badges exposant (🦊²) pour distinguer les
-                            personnes qui ont choisi le même emoji
-    - a11y.js             : améliorations d'accessibilité (focus des vues,
-                            aria-current, état vide des conversations)
     - mp-sync.js          : synchronisation cloud des messages privés
-                            (les MP transitent par la table "messages")
+    - notify.js           : notifications système (PC + mobile) à la
+                            réception d'un message privé
+    - profile.js, emoji-distinguish.js, a11y.js, account.js
     L'attribut "defer" garantit que les scripts s'exécutent APRÈS le
-    chargement du HTML (sinon les getElementById échoueraient).
-    L'ordre compte : script.js d'abord (définit savePosts), puis
-    supabase-sync.js qui le branche, puis mp-sync.js qui branche
-    saveConvs() (défini par script.js) et réutilise sbClient.
+    chargement du HTML. L'ordre compte : script.js d'abord, puis
+    supabase-sync.js, puis mp-sync.js.
   -->
   <script src="script.js" defer></script>
   <script src="supabase-sync.js" defer></script>
   <script src="mp-sync.js" defer></script>
+  <script src="notify.js" defer></script>
   <script src="profile.js" defer></script>
   <script src="emoji-distinguish.js" defer></script>
+  <script src="account.js" defer></script>
   <script src="a11y.js" defer></script>
 </head>
 <body>
@@ -54,13 +51,10 @@
 
 <!-- ============================================================
      ONBOARDING : 3 étapes obligatoires (emoji → intérêts → personnalité)
-     On ne peut pas passer une étape : chaque bouton valide avant de continuer.
-     Une barre de progression indique où on en est.
      ============================================================ -->
 <div id="onboarding" style="max-width:700px; margin:24px auto; padding:0 16px;">
   <div class="card">
 
-    <!-- Barre de progression : se remplit à chaque étape validée -->
     <div class="progress-bar" aria-hidden="true"><div class="progress-fill" id="progressFill"></div></div>
 
     <!-- Étape 1 : Emoji (liste prédéfinie OU champ libre) -->
@@ -68,8 +62,6 @@
       <h2>1️⃣ Choisis ton emoji</h2>
       <p style="color:#94a3b8; font-size:.9rem;">Choisis un emoji dans la liste ou tape ton propre emoji / caractère. Ton emoji sera ton identité sur le site — si quelqu'un d'autre a le même, un petit numéro vous distinguera (ex : 🦊 et 🦊²).</p>
       <div class="emoji-picker" id="onboardEmojiPicker" role="group" aria-label="Sélection d'emoji"></div>
-      <!-- maxlength=8 : certains emojis (drapeaux, familles, skin tones)
-           comptent plus de 4 unités UTF-16 et seraient coupés avec 4 -->
       <input type="text" id="customEmoji" maxlength="8" placeholder="Ou tape ton emoji / caractère ici (ex : 🐉 ou ★)" style="margin-top:12px;" aria-label="Emoji personnalisé">
       <p class="error-msg" id="errStep1" role="alert">⚠️ Veuillez sélectionner un emoji ou en saisir un.</p>
       <button onclick="validateStep1()">Continuer →</button>
@@ -98,54 +90,45 @@
 
 <!-- ============================================================
      APPLICATION : trois "vues" — feed, messages privés, paramètres.
-     La navigation se fait via la barre du bas (bottom-nav) et,
-     pour les posts, via le hash d'URL (#post/<id>).
      ============================================================ -->
 <div id="app" style="display:none;">
   <div class="container" style="grid-template-columns:1fr;">
 
-    <!-- Vue Feed : création de post + recherche + tri + liste -->
+    <!-- Vue Feed -->
     <main id="feedView">
       <div class="card">
         <h2>✍️ Créer un post</h2>
-        <!-- Barre contextuelle : s'affiche quand on modifie un post -->
         <div id="editBar"></div>
         <textarea id="postText" rows="3" maxlength="500" placeholder="Quoi de neuf ? (500 caractères max)" aria-label="Contenu du post"></textarea>
         <div class="char-counter" id="charCounter">0 / 500</div>
         <button onclick="createPost()">Publier</button>
       </div>
 
-      <!-- Recherche en direct : filtre les posts au fur et à mesure de la saisie -->
       <div class="search-input">
         <input type="text" id="searchInput" placeholder="🔍 Rechercher dans les posts..." aria-label="Rechercher un post">
       </div>
 
-      <!-- Barre de tri : récents ou populaires -->
       <div class="sort-bar" role="group" aria-label="Trier le feed">
         <button id="sortRecent" class="active" onclick="setSort('recent')">🕒 Récents</button>
         <button id="sortPopular" onclick="setSort('popular')">🔥 Populaires</button>
       </div>
 
       <h2>📰 Feed</h2>
-      <div id="undoArea"></div> <!-- zone du message "post supprimé / annuler" -->
+      <div id="undoArea"></div>
       <div id="feed"></div>
     </main>
 
-    <!-- Vue Détail : un seul post, ses réponses, avec bouton retour -->
+    <!-- Vue Détail : un post et ses réponses -->
     <main id="detailView" style="display:none;">
       <button class="back-btn" onclick="showFeed()">← Retour au feed</button>
       <div id="postDetail" style="margin-top:16px;"></div>
     </main>
 
-    <!-- ============================================================
-         Vue MESSAGES PRIVÉS : liste des conversations, puis salon
-         de discussion avec un auteur de post.
-         ============================================================ -->
+    <!-- Vue MESSAGES PRIVÉS -->
     <main id="messagesView" style="display:none;">
       <h2>💬 Messages privés</h2>
       <div id="convList"></div>
 
-      <!-- Salon de discussion (caché tant qu'aucune conversation ouverte) -->
       <div id="chatArea" style="display:none;">
         <button class="back-btn" onclick="closeChat()">← Conversations</button>
         <div class="chat-head" id="chatHead"></div>
@@ -154,15 +137,11 @@
           <input type="text" id="msgInput" maxlength="300" placeholder="Ton message... (Entrée pour envoyer)" aria-label="Message privé">
           <button type="button" onclick="sendMessage()" aria-label="Envoyer">➤</button>
         </div>
-        <!-- Compteur de caractères du message privé -->
         <div class="char-counter" id="msgCounter">0 / 300</div>
       </div>
     </main>
 
-    <!-- ============================================================
-         Vue PARAMÈTRES : modifier son emoji, ses intérêts, sa
-         personnalité, voir son pseudo, ou repartir de zéro.
-         ============================================================ -->
+    <!-- Vue PARAMÈTRES -->
     <main id="settingsView" style="display:none;">
       <div class="card">
         <h2>⚙️ Paramètres</h2>
@@ -183,6 +162,12 @@
       </div>
 
       <div class="card">
+        <h2>🔔 Notifications</h2>
+        <p style="color:#94a3b8; font-size:.9rem;" id="notifStatus">État des notifications en cours de vérification...</p>
+        <button id="notifBtn" onclick="askNotifyPermission()">🔔 Activer les notifications</button>
+      </div>
+
+      <div class="card">
         <h2>♻️ Recommencer</h2>
         <p style="color:#94a3b8; font-size:.9rem;">Efface ton profil et refais l'onboarding. Tes posts seront conservés.</p>
         <button class="delete-btn" onclick="resetOnboarding()">🔄 Refaire l'onboarding</button>
@@ -191,14 +176,10 @@
 
   </div>
 
-  <!-- Bouton "retour en haut" : apparaît après avoir défilé (géré par script.js) -->
   <button id="toTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Retour en haut"
     style="position:fixed;bottom:90px;left:20px;display:none;z-index:60;margin:0;min-width:48px;min-height:48px;">↑</button>
 
-  <!-- ============================================================
-       BARRE DE NAVIGATION (fixe, en bas, effet verre dépoli)
-       Trois onglets : Feed / Messages / Paramètres.
-       ============================================================ -->
+  <!-- Barre de navigation (fixe, en bas, effet verre dépoli) -->
   <nav class="bottom-nav" id="bottomNav" role="navigation" aria-label="Navigation principale">
     <button type="button" data-view="feed" class="active" onclick="navTo('feed')" aria-label="Feed">
       <span class="nav-icon">📰</span><span class="nav-label">Feed</span>
