@@ -6,12 +6,24 @@
   document.head.appendChild(style);
 
   var MP_TOMBSTONE_KEY = "emojitalk:mp-deleted-ids";
+  var MP_DELETE_OUTBOX_KEY = "emojitalk:mp-delete-outbox";
   function persistTombstone(ids) {
     try {
       var old = JSON.parse(localStorage.getItem(MP_TOMBSTONE_KEY) || "[]") || [];
       ids.forEach(function (id) { if (id && old.indexOf(String(id)) === -1) old.push(String(id)); });
       localStorage.setItem(MP_TOMBSTONE_KEY, JSON.stringify(old.slice(-1000)));
     } catch (e) { /* stockage indisponible : suppression locale tout de même */ }
+  }
+  function queueDeleteForSync(detail) {
+    try {
+      var queue = JSON.parse(localStorage.getItem(MP_DELETE_OUTBOX_KEY) || "[]") || [];
+      var m = detail.message || {};
+      var key = String(detail.id || m.id) + "|" + String(detail.peerId) + "|" + String(m.date);
+      if (!queue.some(function (item) { return item.key === key; })) {
+        queue.push({ key: key, id: detail.id, peerId: detail.peerId, message: m });
+      }
+      localStorage.setItem(MP_DELETE_OUTBOX_KEY, JSON.stringify(queue.slice(-1000)));
+    } catch (e) { console.warn("[EmojiTalk] File de suppression MP locale indisponible."); }
   }
   function makeId() {
     if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID();
@@ -94,6 +106,7 @@
     if (!found) return;
     var detail = { id: found.message.id, peerId: peerId, message: Object.assign({}, found.message) };
     persistTombstone([detail.id, detail.message._cloudId, "legacy:" + peerId + "|" + detail.message.date]);
+    queueDeleteForSync(detail);
     found.conv.messages.splice(found.index, 1);
     saveLocal();
     document.dispatchEvent(new CustomEvent("emojitalk:mp-deleted", { detail: detail }));
