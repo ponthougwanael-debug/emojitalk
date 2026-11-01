@@ -16,25 +16,27 @@
   -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!--
-    La logique JavaScript est séparée en six fichiers :
+    La logique JavaScript est séparée en plusieurs fichiers :
     - script.js           : le cœur du site (posts, likes, MPs, paramètres...)
     - supabase-sync.js    : synchronisation cloud du feed entre visiteurs
     - profile.js          : identité par emoji + fiche profil au clic sur l'avatar
     - emoji-distinguish.js: badges exposant (🦊²) pour distinguer les
                             personnes qui ont choisi le même emoji
-    - account.js          : suppression du compte (irréversible, avec confirmation)
     - a11y.js             : améliorations d'accessibilité (focus des vues,
                             aria-current, état vide des conversations)
+    - mp-sync.js          : synchronisation cloud des messages privés
+                            (les MP transitent par la table "messages")
     L'attribut "defer" garantit que les scripts s'exécutent APRÈS le
     chargement du HTML (sinon les getElementById échoueraient).
     L'ordre compte : script.js d'abord (définit savePosts), puis
-    supabase-sync.js qui le branche.
+    supabase-sync.js qui le branche, puis mp-sync.js qui branche
+    saveConvs() (défini par script.js) et réutilise sbClient.
   -->
   <script src="script.js" defer></script>
   <script src="supabase-sync.js" defer></script>
+  <script src="mp-sync.js" defer></script>
   <script src="profile.js" defer></script>
   <script src="emoji-distinguish.js" defer></script>
-  <script src="account.js" defer></script>
   <script src="a11y.js" defer></script>
 </head>
 <body>
@@ -184,12 +186,6 @@
         <h2>♻️ Recommencer</h2>
         <p style="color:#94a3b8; font-size:.9rem;">Efface ton profil et refais l'onboarding. Tes posts seront conservés.</p>
         <button class="delete-btn" onclick="resetOnboarding()">🔄 Refaire l'onboarding</button>
-      </div>
-
-      <div class="card">
-        <h2>🗑️ Supprimer mon compte</h2>
-        <p style="color:#94a3b8; font-size:.9rem;">Supprime définitivement ton profil, tous tes posts, tes réponses et tes conversations. <strong style="color:#f87171;">Cette action est irréversible.</strong></p>
-        <button class="delete-btn" onclick="openDeleteAccountModal()">🗑️ Supprimer mon compte</button>
       </div>
     </main>
 
