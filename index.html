@@ -22,15 +22,18 @@
     - mp-sync.js          : synchronisation cloud des messages privés
     - notify.js           : notifications système (PC + mobile) à la
                             réception d'un message privé
+    - report-reason.js    : modale demandant la raison d'un signalement
+                            (remplace reportPost de script.js)
     - profile.js, emoji-distinguish.js, a11y.js, account.js
     L'attribut "defer" garantit que les scripts s'exécutent APRÈS le
     chargement du HTML. L'ordre compte : script.js d'abord, puis
-    supabase-sync.js, puis mp-sync.js.
+    supabase-sync.js, puis mp-sync.js, puis report-reason.js.
   -->
   <script src="script.js" defer></script>
   <script src="supabase-sync.js" defer></script>
   <script src="mp-sync.js" defer></script>
   <script src="notify.js" defer></script>
+  <script src="report-reason.js" defer></script>
   <script src="profile.js" defer></script>
   <script src="emoji-distinguish.js" defer></script>
   <script src="account.js" defer></script>
