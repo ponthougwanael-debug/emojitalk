@@ -3,13 +3,10 @@
 /* ============================================================
    mp-sync.js — Synchronisation des messages privés via Supabase
    ------------------------------------------------------------
-   AVANT : les MP n'existaient que dans le localStorage de chaque
-   navigateur → un message envoyé n'arrivait jamais chez le
-   destinataire. Désormais chaque message est enregistré dans la
-   table cloud "messages" (voir mp-supabase.sql) et récupéré par
-   le destinataire toutes les 4 secondes.
-   Ce fichier se branche sur script.js sans le modifier : il
-   remplace saveConvs() pour pousser les nouveaux messages.
+   Chaque message est enregistré dans la table cloud "messages"
+   (voir mp-supabase.sql) et récupéré par le destinataire toutes
+   les 4 secondes. À la réception, une notification système est
+   affichée (notify.js) en plus du toast dans la page.
    ============================================================ */
 
 (function () {
@@ -21,6 +18,7 @@
   var MSG_TABLE = "messages";
   var lastSync = 0;        // date du dernier message reçu du cloud
   var sentKeys = {};       // anti-doublon pour l'envoi
+  var firstPull = true;    // ne pas notifier pour l'historique au démarrage
 
   /** Clé de conversation : les deux participants, triés ("a|b") */
   function convKey(a, b) { return [a, b].sort().join("|"); }
@@ -69,6 +67,7 @@
         if (res.error) { console.warn("[EmojiTalk] Réception MP échouée :", res.error.message); return; }
 
         var changed = false;
+        var newest = { pseudo: "", emoji: "", text: "" };
         (res.data || []).forEach(function (r) {
           var d = Date.parse(r.msg_date);
           if (d > lastSync) lastSync = d;
@@ -89,6 +88,9 @@
             });
             if (!exists) {
               c.messages.push({ from: "peer", text: r.text, date: d });
+              newest.pseudo = r.from_pseudo || c.peerPseudo || "Quelqu'un";
+              newest.emoji = r.from_emoji || c.peerEmoji || "😀";
+              newest.text = r.text;
               changed = true;
             }
           }
@@ -99,11 +101,19 @@
         _origSaveConvs(); // stocke en local SANS repousser vers le cloud
 
         // Rafraîchit l'affichage si l'utilisateur est dans les messages
-        if (document.getElementById("messagesView").style.display !== "none") {
+        var inMessages = document.getElementById("messagesView").style.display !== "none";
+        if (inMessages) {
           if (currentPeer) renderChatMessages();
           renderConvs();
           showToast("💬 Nouveau message reçu !");
         }
+
+        // NOTIFICATION SYSTÈME (bandeau mobile / bulle bureau),
+        // sauf pour l'historique récupéré au chargement de la page.
+        if (!firstPull && typeof showSystemNotification === "function") {
+          showSystemNotification("💬 " + newest.emoji + " " + newest.pseudo, newest.text);
+        }
+        firstPull = false;
       });
   }
 
@@ -111,9 +121,7 @@
   pushNewMessages();            // renvoie les messages restés en attente
   setInterval(pullMessages, 4000);
 
-  /* --- 4. Correctifs d'affichage MOBILE (injection CSS) ---
-     La mise en page ne s'adaptait pas sur smartphone : textes qui
-     débordent, champs trop larges, zones tactiles trop petites. */
+  /* --- 4. Correctifs d'affichage MOBILE (injection CSS) --- */
   var css = document.createElement("style");
   css.textContent =
     "@media (max-width: 640px){" +
@@ -125,7 +133,7 @@
     "  .post p,.detail-text,.bubble,.conv-last{overflow-wrap:anywhere;word-break:break-word;}" +
     "  textarea,input[type='text'],input[type='search']{" +
     "    width:100% !important;max-width:100% !important;box-sizing:border-box;" +
-    "    font-size:16px;}" + /* 16px = évite le zoom automatique sur iOS */
+    "    font-size:16px;}" +
     "  button{min-height:44px;}" +
     "  .bottom-nav button{flex:1;min-width:0;padding:8px 4px;}" +
     "  .nav-label{font-size:.7rem;}" +
