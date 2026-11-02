@@ -1,0 +1,11 @@
+# Dépendances / build locaux
+node_modules/
+
+# Environnement et secrets
+.env
+.env.*
+*.local
+
+# Système
+.DS_Store
+Thumbs.db
