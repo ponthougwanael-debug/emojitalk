@@ -587,11 +587,10 @@ function postCardHTML(p, isDetail){
   var reported = p.reportedBy.indexOf(me.id) !== -1; // ai-je déjà signalé ?
   var h = "";
 
-  // En-tête : avatar + pseudo + date relative (+ badge "modifié")
+  // En-tête : avatar + date relative (+ badge "modifié")
   h += '<div class="post-head">';
   h += '<span class="avatar" aria-hidden="true"' + (isDetail ? ' style="font-size:3rem;"' : '') + '>' + esc(p.authorEmoji) + '</span>';
-  h += '<div><strong>' + esc(p.authorPseudo || "Anonyme") + ' ' + esc(p.authorEmoji) + '</strong><br>';
-  h += '<time>' + relativeDate(p.date) + (p.edited ? ' · <em>(modifié)</em>' : '') + '</time></div>';
+  h += '<div><time>' + relativeDate(p.date) + (p.edited ? ' · <em>(modifié)</em>' : '') + '</time></div>';
   h += '</div>';
 
   // Texte du post (échappé, retours à la ligne conservés)
@@ -742,9 +741,9 @@ function renderDetail(){
     h += '</div>';
   }
 
-  // Zone de réponse : pré-remplie avec "@Pseudo " pour répondre à l'auteur
+  // Zone de réponse
   h += '<div class="card"><h2>↩️ Répondre</h2>'
-     + '<textarea id="replyText" rows="2" maxlength="' + MAX_LEN + '" placeholder="Ta réponse à ' + esc(p.authorPseudo || "Anonyme") + '..." aria-label="Réponse au post"></textarea>'
+     + '<textarea id="replyText" rows="2" maxlength="' + MAX_LEN + '" placeholder="Ta réponse..." aria-label="Réponse au post"></textarea>'
      + '<button onclick="submitReply(' + id + ')">Répondre</button></div>';
 
   container.innerHTML = h;
@@ -891,7 +890,7 @@ function renderConvs(){
     item.setAttribute("data-author-id", id); // fiche profil fiable
     item.innerHTML =
       '<span class="avatar">' + esc(c.peerEmoji) + '</span>' +
-      '<div class="conv-info"><strong>' + esc(c.peerPseudo) + '</strong>' +
+      '<div class="conv-info">' +
       '<span class="conv-last">' + (last ? esc(last.text) : "Nouvelle conversation") + '</span></div>' +
       '<button type="button" class="delete-btn" aria-label="Supprimer la conversation">🗑️</button>';
     item.onclick = function () { openChat(id); };
@@ -922,7 +921,7 @@ function openChat(peerId){
   document.getElementById("convList").style.display = "none";
   document.getElementById("chatArea").style.display = "block";
   document.getElementById("chatHead").innerHTML =
-    '<span class="avatar">' + esc(c.peerEmoji) + '</span> <strong>' + esc(c.peerPseudo) + '</strong>';
+    '<span class="avatar">' + esc(c.peerEmoji) + '</span>';
 
   renderChatMessages();
   var input = document.getElementById("msgInput");
@@ -944,7 +943,7 @@ function renderChatMessages(){
   if (!c) return;
   var box = document.getElementById("chatMessages");
   if (!c.messages.length) {
-    box.innerHTML = '<div class="empty">Dis bonjour à ' + esc(c.peerPseudo) + ' ! 👋</div>';
+    box.innerHTML = '<div class="empty">Dis bonjour à ton correspondant ! 👋</div>';
     return;
   }
   box.innerHTML = "";
@@ -1007,7 +1006,7 @@ function buildSettings(){
     personality: (me.personality || []).slice()
   };
 
-  document.getElementById("settingsPseudo").textContent = me.pseudo;
+  document.getElementById("settingsPseudo").textContent = "";
   document.getElementById("errSettings").style.display = "none";
 
   // --- Sélecteur d'emoji ---
