@@ -25,6 +25,7 @@
     - report-reason.js    : modale demandant la raison d'un signalement
                             (remplace reportPost de script.js)
     - profile.js, emoji-distinguish.js, a11y.js, account.js
+    - rewards.js          : XP, niveaux et pièces (récolte toutes les 24 h)
     L'attribut "defer" garantit que les scripts s'exécutent APRÈS le
     chargement du HTML. L'ordre compte : script.js d'abord, puis
     supabase-sync.js, puis mp-sync.js, puis report-reason.js.
@@ -39,6 +40,7 @@
   <script src="emoji-distinguish.js" defer></script>
   <script src="account.js" defer></script>
   <script src="a11y.js" defer></script>
+  <script src="rewards.js" defer></script>
 </head>
 <body>
 
