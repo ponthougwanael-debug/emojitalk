@@ -138,6 +138,15 @@ posts.forEach(function (p) {
 
 /** Sauvegarde le profil dans localStorage */
 function saveMe(){ localStorage.setItem(ME_KEY, JSON.stringify(me)); }
+/** Génère un identifiant unique pour les entités locales. */
+function uniqueId(){
+  if (typeof crypto !== "undefined" && crypto && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+/** Formate un identifiant interne pour un argument JavaScript en attribut HTML. */
+function inlineId(id){
+  return typeof id === "number" ? String(id) : "'" + String(id).replace(/\\/g, "\\\\").replace(/'/g, "\\'") + "'";
+}
 /** Sauvegarde les posts dans localStorage */
 function savePosts(){ localStorage.setItem(POSTS_KEY, JSON.stringify(posts)); }
 /** Sauvegarde les conversations privées dans localStorage */
@@ -404,7 +413,7 @@ function createPost(){
   // On fige l'emoji / les tags / le pseudo au moment de la publication :
   // modifier son profil plus tard ne réécrira pas l'historique.
   posts.unshift({
-    id: Date.now(),
+    id: uniqueId(),
     authorId: me.id,
     authorPseudo: me.pseudo,
     authorEmoji: me.emoji,
@@ -468,12 +477,16 @@ function deletePostSafe(id){
   if (idx === -1) return;
 
   lastDeleted = posts[idx]; lastIndex = idx;
-  posts.splice(idx, 1);
+  var removedReplies = posts.filter(function (p) { return p.parentId === id; });
+  posts = posts.filter(function (p) { return p.id !== id && p.parentId !== id; });
   savePosts();
   showFeed();
 
-  // Notifie les autres scripts (supabase-sync.js) de la suppression cloud.
+  // Notifie la suppression cloud du post et de chaque réponse supprimée.
   document.dispatchEvent(new CustomEvent("emojitalk:post-deleted", { detail: { id: id } }));
+  removedReplies.forEach(function (reply) {
+    document.dispatchEvent(new CustomEvent("emojitalk:post-deleted", { detail: { id: reply.id } }));
+  });
 
   var area = document.getElementById("undoArea");
   area.innerHTML = '<div class="undo-box" role="status"><span>🗑️ Post supprimé.</span><button type="button" onclick="undoRestore()">↩️ Annuler</button></div>';
@@ -546,6 +559,7 @@ function setSort(mode){
   renderFeed();
 }
 
+
 /**
  * Retourne les posts à afficher dans le feed : on exclut les réponses
  * (elles apparaissent dans la vue détail de leur post parent), puis on
@@ -560,12 +574,14 @@ function sortedPosts(){
       + p.authorInterests.join(" ") + " " + p.authorPersonality.join(" ")).toLowerCase();
     return haystack.indexOf(searchTerm) !== -1;
   });
-  if (sortMode === "popular") arr.sort(function (a, b) { return (b.likes - a.likes) || (b.date - a.date); });
+  if (sortMode === "popular") arr.sort(function (a, b) { return (likeCount(b) - likeCount(a)) || (b.date - a.date); });
   else arr.sort(function (a, b) { return b.date - a.date; });
   return arr;
 }
 
 /** Retourne le nombre de réponses d'un post */
+function likeCount(p){ return Array.isArray(p.likedBy) ? p.likedBy.length : 0; }
+
 function replyCount(id){
   var n = 0;
   posts.forEach(function (p) { if (p.parentId === id) n++; });
@@ -605,24 +621,24 @@ function postCardHTML(p, isDetail){
   // Zone d'actions : la propagation du clic est bloquée plus bas
   // pour ne pas déclencher l'ouverture du post.
   h += '<div data-actions="1">';
-  h += '<button type="button" class="like' + (liked ? " liked" : "") + '" onclick="toggleLike(' + p.id + ')" aria-label="Aimer ce post">' + (liked ? "❤️" : "🤍") + " " + p.likes + (isDetail ? " j'aime" : "") + '</button>';
+  h += '<button type="button" class="like' + (liked ? " liked" : "") + '" onclick="toggleLike(' + inlineId(p.id) + ')" aria-label="Aimer ce post">' + (liked ? "❤️" : "🤍") + " " + likeCount(p) + (isDetail ? " j'aime" : "") + '</button>';
 
   // Dans le feed : lien vers le détail + nombre de réponses
   if (!isDetail) {
     var rc = replyCount(p.id);
-    h += '<button type="button" class="mp-btn" onclick="openPost(' + p.id + ')" aria-label="Voir les réponses">💬 ' + rc + '</button>';
+    h += '<button type="button" class="mp-btn" onclick="openPost(' + inlineId(p.id) + ')" aria-label="Voir les réponses">💬 ' + rc + '</button>';
   }
-  h += '<button type="button" class="report-btn' + (reported ? " reported" : "") + '" onclick="reportPost(' + p.id + ')" aria-label="Signaler ce post"' + (reported ? " disabled" : "") + '>🚩 ' + (reported ? "Signalé" : "Signaler") + '</button>';
+  h += '<button type="button" class="report-btn' + (reported ? " reported" : "") + '" onclick="reportPost(' + inlineId(p.id) + ')" aria-label="Signaler ce post"' + (reported ? " disabled" : "") + '>🚩 ' + (reported ? "Signalé" : "Signaler") + '</button>';
   // Bouton message privé : uniquement pour les posts des AUTRES
   if (p.authorId !== me.id) {
     h += '<button type="button" class="mp-btn" onclick="startConv(\'' + p.authorId + '\')">💬 MP</button>';
   }
   // Boutons modifier / supprimer : uniquement pour l'auteur du post
   if (p.authorId === me.id) {
-    h += '<button type="button" class="delete-btn" onclick="deletePostSafe(' + p.id + ')">🗑️ ' + (isDetail ? "Supprimer mon post" : "Supprimer") + '</button>';
+    h += '<button type="button" class="delete-btn" onclick="deletePostSafe(' + inlineId(p.id) + ')">🗑️ ' + (isDetail ? "Supprimer mon post" : "Supprimer") + '</button>';
     // Modification possible pendant 5 minutes après publication
     if (Date.now() - p.date < EDIT_WINDOW) {
-      h += '<button type="button" class="mp-btn" onclick="startEdit(' + p.id + ')">✏️ ' + (isDetail ? "Modifier mon post" : "Modifier") + '</button>';
+      h += '<button type="button" class="mp-btn" onclick="startEdit(' + inlineId(p.id) + ')">✏️ ' + (isDetail ? "Modifier mon post" : "Modifier") + '</button>';
     }
   }
   h += '</div>';
@@ -680,11 +696,10 @@ function toggleLike(id){
   var idx = p.likedBy.indexOf(me.id);
   if (idx !== -1) {
     p.likedBy.splice(idx, 1);              // déjà liké → on retire le like
-    p.likes = Math.max(0, p.likes - 1);
   } else {
     p.likedBy.push(me.id);                 // pas encore liké → on ajoute
-    p.likes++;
   }
+  p.likes = p.likedBy.length;
   savePosts();
   if (location.hash.indexOf("#post/") === 0) renderDetail();
   else renderFeed();
@@ -722,17 +737,17 @@ function showDetail(){
  * et une zone de réponse.
  */
 function renderDetail(){
-  var id = parseInt(location.hash.replace("#post/", ""), 10);
+  var id = location.hash.replace("#post/", "");
   var p = null;
-  for (var i = 0; i < posts.length; i++) { if (posts[i].id === id) { p = posts[i]; break; } }
+  for (var i = 0; i < posts.length; i++) { if (String(posts[i].id) === id) { p = posts[i]; break; } }
+  if (!p) { showFeed(); return; }
   var container = document.getElementById("postDetail");
-  if (!p) { container.innerHTML = '<div class="empty">Post introuvable. 😕</div>'; return; }
 
   // Post parent
   var h = '<div class="card">' + postCardHTML(p, true) + '</div>';
 
   // Réponses existantes (du plus ancien au plus récent)
-  var replies = posts.filter(function (x) { return x.parentId === id; })
+  var replies = posts.filter(function (x) { return x.parentId === p.id; })
                      .sort(function (a, b) { return a.date - b.date; });
   h += '<h2 style="margin:18px 0 10px;">💬 ' + replies.length + ' réponse' + (replies.length > 1 ? "s" : "") + '</h2>';
   if (replies.length) {
@@ -744,7 +759,7 @@ function renderDetail(){
   // Zone de réponse
   h += '<div class="card"><h2>↩️ Répondre</h2>'
      + '<textarea id="replyText" rows="2" maxlength="' + MAX_LEN + '" placeholder="Ta réponse..." aria-label="Réponse au post"></textarea>'
-     + '<button onclick="submitReply(' + id + ')">Répondre</button></div>';
+     + '<button onclick="submitReply(' + inlineId(p.id) + ')">Répondre</button></div>';
 
   container.innerHTML = h;
 }
@@ -763,7 +778,7 @@ function submitReply(parentId){
   if (containsBanned(text)) { showToast("🚫 Mots inappropriés détectés. Restons respectueux.", "error"); return; }
 
   posts.unshift({
-    id: Date.now(),
+    id: uniqueId(),
     authorId: me.id,
     authorPseudo: me.pseudo,
     authorEmoji: me.emoji,
