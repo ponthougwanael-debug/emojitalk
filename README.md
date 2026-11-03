@@ -11,6 +11,7 @@ Site de discussion **sans compte** : ton identité, c'est un emoji. Choisis ton 
 - 💬 **Messages privés** — conversations 1-to-1 en temps quasi réel
 - 🚩 **Signalements** — avec choix du motif, et mots interdits côté client
 - 🔔 **Notifications système** — à la réception d'un message privé (PWA)
+- 🏆 **XP, niveaux et pièces** — gagne de l'expérience en publiant et en interagissant, monte de niveau et récolte des pièces toutes les 24 h
 - ♿ **Accessibilité** — navigation clavier, ARIA, contrastes
 - ☁️ **Synchronisation cloud** — le feed et les MPs sont partagés entre tous les visiteurs via Supabase
 
@@ -31,6 +32,7 @@ Site de discussion **sans compte** : ton identité, c'est un emoji. Choisis ton 
 | `mp-sync.js` | Sync cloud des messages privés |
 | `notify.js` | Notifications système |
 | `report-reason.js` | Modale de motif de signalement |
+| `rewards.js` | XP, niveaux et pièces (récolte 24 h) |
 | `profile.js`, `account.js` | Profil et gestion du compte |
 | `emoji-distinguish.js`, `a11y.js` | Distinction d'emoji, accessibilité |
 | `*.sql` | Scripts de création des tables et policies Supabase |
